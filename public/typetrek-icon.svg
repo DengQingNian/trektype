@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">TypeTrek</title>
+  <desc id="desc">A keyboard key with a colorful activity trail</desc>
+  <defs>
+    <linearGradient id="surface" x1="120" y1="80" x2="900" y2="940" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#172554" />
+      <stop offset="1" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="key" x1="270" y1="292" x2="765" y2="704" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67e8f9" />
+      <stop offset="0.48" stop-color="#38bdf8" />
+      <stop offset="1" stop-color="#6366f1" />
+    </linearGradient>
+    <linearGradient id="trail" x1="202" y1="796" x2="825" y2="228" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#a78bfa" />
+      <stop offset="0.48" stop-color="#22d3ee" />
+      <stop offset="1" stop-color="#facc15" />
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="18" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <filter id="soft-shadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="22" stdDeviation="22" flood-color="#020617" flood-opacity="0.46" />
+    </filter>
+  </defs>
+
+  <rect x="32" y="32" width="960" height="960" rx="228" fill="url(#surface)" />
+  <rect x="48" y="48" width="928" height="928" rx="212" fill="none" stroke="#93c5fd" stroke-opacity="0.14" stroke-width="8" />
+
+  <path
+    d="M188 765C270 842 392 850 473 787C542 734 554 649 517 586C478 520 488 429 553 365C621 299 733 304 816 372"
+    fill="none"
+    stroke="url(#trail)"
+    stroke-linecap="round"
+    stroke-width="34"
+    opacity="0.9"
+  />
+  <circle cx="188" cy="765" r="22" fill="#a78bfa" filter="url(#glow)" />
+  <circle cx="816" cy="372" r="22" fill="#facc15" filter="url(#glow)" />
+
+  <g filter="url(#soft-shadow)">
+    <rect x="236" y="252" width="552" height="448" rx="108" fill="#020617" fill-opacity="0.48" transform="rotate(-6 512 476)" />
+    <rect x="236" y="236" width="552" height="448" rx="108" fill="url(#key)" transform="rotate(-6 512 460)" />
+    <rect x="262" y="262" width="500" height="396" rx="84" fill="none" stroke="#e0f2fe" stroke-opacity="0.32" stroke-width="8" transform="rotate(-6 512 460)" />
+  </g>
+
+  <g fill="#082f49" opacity="0.88" transform="rotate(-6 512 460)">
+    <rect x="334" y="342" width="72" height="52" rx="18" />
+    <rect x="430" y="342" width="72" height="52" rx="18" />
+    <rect x="526" y="342" width="72" height="52" rx="18" />
+    <rect x="622" y="342" width="72" height="52" rx="18" />
+    <rect x="334" y="424" width="72" height="52" rx="18" />
+    <rect x="430" y="424" width="72" height="52" rx="18" />
+    <rect x="526" y="424" width="72" height="52" rx="18" />
+    <rect x="622" y="424" width="72" height="52" rx="18" />
+    <rect x="334" y="506" width="168" height="52" rx="18" />
+    <rect x="526" y="506" width="168" height="52" rx="18" />
+  </g>
+
+  <circle cx="676" cy="640" r="34" fill="#facc15" stroke="#fef9c3" stroke-opacity="0.85" stroke-width="10" filter="url(#glow)" />
+</svg>

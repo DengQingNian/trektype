@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted } from "vue";
 import { RouterLink, RouterView, useRoute } from "vue-router";
 import { NButton, NTag } from "naive-ui";
+import { Keyboard } from "@vicons/carbon";
 import { useRuntimeStore } from "./stores/runtime";
 import { useSettingsStore } from "./stores/settings";
 
@@ -57,7 +58,7 @@ async function togglePause() {
   <div v-else class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <span class="logo">⌨</span>
+        <span class="logo" aria-hidden="true"><Keyboard /></span>
         <div>
           <div class="name">TypeTrek</div>
           <div class="tagline">本地键鼠行为统计</div>
@@ -127,7 +128,17 @@ async function togglePause() {
   padding: 0 6px;
 }
 .logo {
-  font-size: 26px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #67e8f9;
+  font-size: 27px;
+}
+.logo :deep(svg) {
+  width: 100%;
+  height: 100%;
 }
 .name {
   font-weight: 700;
