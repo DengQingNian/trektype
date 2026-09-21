@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** 时间范围选择：日/周/月/自定义，写入全局 range store（所有统计页联动）。 */
+/** 时间范围选择：日/周/月/年/自定义，写入全局 range store（所有统计页联动）。 */
 import { NDatePicker, NRadioButton, NRadioGroup } from "naive-ui";
 import { computed } from "vue";
 import { useRangeStore } from "../stores/range";
@@ -23,7 +23,7 @@ const customValue = computed({
 });
 
 function onPreset(v: string | number) {
-  if (v === "day" || v === "week" || v === "month") {
+  if (v === "day" || v === "week" || v === "month" || v === "year") {
     range.setPreset(v as Exclude<RangeKind, "custom">);
   }
 }
@@ -35,6 +35,7 @@ function onPreset(v: string | number) {
       <n-radio-button value="day">今日</n-radio-button>
       <n-radio-button value="week">本周</n-radio-button>
       <n-radio-button value="month">本月</n-radio-button>
+      <n-radio-button value="year">本年</n-radio-button>
     </n-radio-group>
     <n-date-picker
       v-model:value="customValue"

@@ -10,7 +10,10 @@
  * 纯函数，单测覆盖 0 值/单值/极值/空数组。
  */
 
-/** 键盘/日历用的单色渐变（低=浅底，高=主色）。 */
+export type HeatmapPalette = "classic" | "ocean" | "sunset" | "forest";
+export type HeatmapRamp = [number, number, number][];
+
+/** 兼容旧调用的蓝色渐变。新热力图统一通过 getHeatmapRamp 取配置色带。 */
 const KEY_RAMP: [number, number, number][] = [
   [232, 240, 254], // #e8f0fe 最浅
   [147, 197, 253],
@@ -27,6 +30,51 @@ const HEAT_RAMP: [number, number, number][] = [
   [255, 255, 0],
   [255, 0, 0],
 ];
+
+const PALETTE_RAMPS: Record<HeatmapPalette, HeatmapRamp> = {
+  /** 经典热力：蓝 → 青绿 → 黄 → 红。 */
+  classic: HEAT_RAMP,
+  /** 海洋：浅蓝 → 青色 → 深海蓝。 */
+  ocean: [
+    [224, 242, 254],
+    [125, 211, 252],
+    [14, 165, 233],
+    [3, 105, 161],
+    [8, 47, 73],
+  ],
+  /** 日落：暖橙 → 品红 → 深紫。 */
+  sunset: [
+    [255, 237, 213],
+    [251, 146, 60],
+    [234, 88, 12],
+    [190, 24, 93],
+    [88, 28, 135],
+  ],
+  /** 森林：浅绿 → 草绿 → 深森林绿。 */
+  forest: [
+    [220, 252, 231],
+    [134, 239, 172],
+    [34, 197, 94],
+    [22, 101, 52],
+    [6, 78, 59],
+  ],
+};
+
+export const HEATMAP_PALETTES: ReadonlyArray<{
+  value: HeatmapPalette;
+  label: string;
+  description: string;
+}> = [
+  { value: "classic", label: "经典热力", description: "蓝 → 绿 → 黄 → 红" },
+  { value: "ocean", label: "海洋", description: "浅蓝 → 青 → 深海蓝" },
+  { value: "sunset", label: "日落", description: "橙 → 品红 → 深紫" },
+  { value: "forest", label: "森林", description: "浅绿 → 草绿 → 深绿" },
+];
+
+/** 读取全局热力图色带；异常值回退到经典热力。 */
+export function getHeatmapRamp(palette: HeatmapPalette): HeatmapRamp {
+  return PALETTE_RAMPS[palette] ?? PALETTE_RAMPS.classic;
+}
 
 /** 取色带中 t∈[0,1] 处的 RGB。 */
 export function rampColor(t: number, ramp: [number, number, number][] = KEY_RAMP): [number, number, number] {
@@ -96,6 +144,7 @@ export function buildColorMap(
   counts: Map<string, number>,
   emptyColor = "#f1f5f9",
   minT = 0.12,
+  ramp: HeatmapRamp = KEY_RAMP,
 ): Map<string, string> {
   const bounds = computeBounds([...counts.values()]);
   const out = new Map<string, string>();
@@ -106,7 +155,7 @@ export function buildColorMap(
     }
     // minT：有数据的键至少给一点可见色，避免"刚有几次"与"零"无法区分
     const t = Math.max(minT, normalize(count, bounds));
-    out.set(key, rgbToCss(rampColor(t)));
+    out.set(key, rgbToCss(rampColor(t, ramp)));
   }
   return out;
 }

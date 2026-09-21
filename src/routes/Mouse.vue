@@ -18,6 +18,7 @@ const loading = ref(false);
 const stats = ref<MouseStats | null>(null);
 
 const cellSize = computed(() => settings.config?.grid_cell_size ?? 24);
+const palette = computed(() => settings.config?.heatmap_palette ?? "classic");
 
 const buttonOption = computed<EChartsOption>(() => ({
   tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
@@ -112,6 +113,7 @@ watch(cellSize, load);
           :cells="stats?.cells ?? []"
           :cell-size="cellSize"
           :total="stats?.total ?? 0"
+          :palette="palette"
         />
       </n-card>
 

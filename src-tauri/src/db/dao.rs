@@ -46,8 +46,8 @@ pub struct AggBatch {
     pub click_grid: HashMap<(String, i64, i32, i32), i64>,
     /// (date, app_id) -> (key_count, click_count)
     pub app_daily: HashMap<(String, i64), (i64, i64)>,
-    /// (date, hour) -> (key_count, click_count)
-    pub hour_daily: HashMap<(String, i32), (i64, i64)>,
+    /// (date, hour) -> (非 repeat 按键次数, repeat 按键次数, 点击次数)
+    pub hour_daily: HashMap<(String, i32), (i64, i64, i64)>,
 }
 
 impl AggBatch {
@@ -61,7 +61,7 @@ impl AggBatch {
     }
 
     /// 键盘事件计数（date/hour 由 ts 本地时区推导）。
-    /// `is_repeat=true` 计入 repeat_count 列，不进入小时/应用活跃度（重复输入不算独立输入动作）。
+    /// `is_repeat=true` 计入 repeat_count 列；小时趋势保留该口径，应用活跃度仍只统计非 repeat。
     pub fn add_key(&mut self, ts_ms: i64, key_code: &str, is_repeat: bool) {
         let date = ts_to_local_date(ts_ms);
         let entry = self
@@ -73,9 +73,7 @@ impl AggBatch {
         } else {
             entry.0 += 1;
         }
-        if !is_repeat {
-            self.add_hour_key(ts_ms);
-        }
+        self.add_hour_key(ts_ms, is_repeat);
     }
 
     /// 鼠标点击计数。
@@ -113,14 +111,19 @@ impl AggBatch {
         }
     }
 
-    fn add_hour_key(&mut self, ts_ms: i64) {
+    fn add_hour_key(&mut self, ts_ms: i64, is_repeat: bool) {
         let key = (ts_to_local_date(ts_ms), ts_to_local_hour(ts_ms));
-        self.hour_daily.entry(key).or_default().0 += 1;
+        let entry = self.hour_daily.entry(key).or_default();
+        if is_repeat {
+            entry.1 += 1;
+        } else {
+            entry.0 += 1;
+        }
     }
 
     fn add_hour_click(&mut self, ts_ms: i64) {
         let key = (ts_to_local_date(ts_ms), ts_to_local_hour(ts_ms));
-        self.hour_daily.entry(key).or_default().1 += 1;
+        self.hour_daily.entry(key).or_default().2 += 1;
     }
 }
 
@@ -225,13 +228,14 @@ pub fn upsert_aggregates(conn: &Connection, agg: &AggBatch) -> rusqlite::Result<
 
     if !agg.hour_daily.is_empty() {
         let mut stmt = conn.prepare_cached(
-            "INSERT INTO agg_hour_daily(date, hour, key_count, click_count) VALUES (?1, ?2, ?3, ?4)
+            "INSERT INTO agg_hour_daily(date, hour, key_count, repeat_count, click_count) VALUES (?1, ?2, ?3, ?4, ?5)
              ON CONFLICT(date, hour) DO UPDATE SET
                key_count = key_count + excluded.key_count,
+               repeat_count = repeat_count + excluded.repeat_count,
                click_count = click_count + excluded.click_count",
         )?;
-        for ((date, hour), (k, c)) in &agg.hour_daily {
-            stmt.execute(params![date, hour, k, c])?;
+        for ((date, hour), (k, r, c)) in &agg.hour_daily {
+            stmt.execute(params![date, hour, k, r, c])?;
         }
     }
 
@@ -456,20 +460,21 @@ mod tests {
             "KeyA 非 repeat=1；Space repeat=1；点击=1"
         );
 
-        let (grid, appk, appc, hk): (i64, i64, i64, i64) = conn
+        let (grid, appk, appc, hk, hr): (i64, i64, i64, i64, i64) = conn
             .query_row(
                 "SELECT (SELECT count FROM agg_click_grid_daily WHERE date='2024-03-05' AND cell_x=4 AND cell_y=8),
                         (SELECT key_count FROM agg_app_daily WHERE date='2024-03-05'),
                         (SELECT click_count FROM agg_app_daily WHERE date='2024-03-05'),
-                        (SELECT key_count FROM agg_hour_daily WHERE date='2024-03-05' AND hour=10)",
+                        (SELECT key_count FROM agg_hour_daily WHERE date='2024-03-05' AND hour=10),
+                        (SELECT repeat_count FROM agg_hour_daily WHERE date='2024-03-05' AND hour=10)",
                 [],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
             )
             .unwrap();
         assert_eq!(
-            (grid, appk, appc, hk),
-            (1, 1, 1, 1),
-            "网格/应用/小时聚合应与事件对应（repeat 不计入小时活跃度）"
+            (grid, appk, appc, hk, hr),
+            (1, 1, 1, 1, 1),
+            "网格/应用/小时聚合应与事件对应；小时聚合单独保留 repeat 计数"
         );
     }
 

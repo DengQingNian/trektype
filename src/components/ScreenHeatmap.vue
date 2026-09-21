@@ -4,13 +4,20 @@
  *
  * 渲染流程（计划 §8.3）：
  * 1. 按 monitors 快照重建虚拟桌面画布（含负坐标与 DPI 折算）；
- * 2. 离屏 canvas 灰度累积（径向渐变 + lighter 叠加）；
- * 3. 逐像素用色带 LUT 上色（蓝→绿→黄→红）；
+ * 2. 按网格点击次数计算 log1p + P05/P99 色阶；
+ * 3. 直接给网格块着色（蓝→绿→黄→红），避免透明白光晕在不同 DPR 下退化成白板；
  * 4. 叠加显示器边框与名称；悬停显示格内点击数。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { NRadioGroup, NRadioButton } from "naive-ui";
-import { RAMPS, rampColor, rgbToCss } from "../lib/colorscale";
+import {
+  computeBounds,
+  getHeatmapRamp,
+  normalize,
+  rampColor,
+  rgbToCss,
+  type HeatmapPalette,
+} from "../lib/colorscale";
 import type { GridCell, MonitorRow } from "../lib/ipc";
 
 const props = defineProps<{
@@ -19,6 +26,8 @@ const props = defineProps<{
   /** 当前网格粒度（px，物理像素），与后端 grid_cell_size 一致 */
   cellSize: number;
   total: number;
+  /** 全局热力图配色方案 */
+  palette: HeatmapPalette;
 }>();
 
 const canvas = ref<HTMLCanvasElement | null>(null);
@@ -81,50 +90,25 @@ function render() {
     ctx.fillRect(p.cx, p.cy, m.width * scale, m.height * scale);
   }
 
-  // 第一遍：离屏灰度累积
-  const off = document.createElement("canvas");
-  off.width = cv.width;
-  off.height = cv.height;
-  const octx = off.getContext("2d");
-  if (!octx) return;
-  octx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-  const counts = props.cells.map((c) => c.count);
-  const max = Math.max(1, ...counts);
-  const maxLog = Math.log1p(max);
-  const radius = Math.max(6, props.cellSize * scale * 2.6);
-
-  octx.globalCompositeOperation = "lighter";
+  // 按当前范围内的点击分布计算色阶；有数据的网格至少显示为可见蓝色。
+  const boundsForColor = computeBounds(props.cells.map((cell) => cell.count));
+  const heatRamp = getHeatmapRamp(props.palette);
   for (const cell of props.cells) {
     const mon = list.find((m) => m.id === cell.monitor_id);
     if (!mon) continue; // 单屏模式下过滤其他屏的数据
-    const px = mon.x + cell.cell_x * props.cellSize + props.cellSize / 2;
-    const py = mon.y + cell.cell_y * props.cellSize + props.cellSize / 2;
-    const p = toCanvas(px, py);
-    const a = Math.min(1, Math.log1p(cell.count) / maxLog);
-    const g = octx.createRadialGradient(p.cx, p.cy, 0, p.cx, p.cy, radius);
-    g.addColorStop(0, `rgba(255,255,255,${0.85 * a + 0.15})`);
-    g.addColorStop(1, "rgba(255,255,255,0)");
-    octx.fillStyle = g;
-    octx.beginPath();
-    octx.arc(p.cx, p.cy, radius, 0, Math.PI * 2);
-    octx.fill();
+    if (cell.count <= 0) continue;
+    const p = toCanvas(mon.x + cell.cell_x * props.cellSize, mon.y + cell.cell_y * props.cellSize);
+    const t = Math.max(0.12, normalize(cell.count, boundsForColor));
+    ctx.fillStyle = rgbToCss(rampColor(t, heatRamp));
+    ctx.globalAlpha = 0.88;
+    ctx.fillRect(
+      p.cx + 0.5,
+      p.cy + 0.5,
+      Math.max(1, props.cellSize * scale - 1),
+      Math.max(1, props.cellSize * scale - 1),
+    );
   }
-
-  // 第二遍：按 alpha 查色带 LUT 上色
-  const img = octx.getImageData(0, 0, off.width, off.height);
-  const data = img.data;
-  for (let i = 0; i < data.length; i += 4) {
-    const alpha = data[i + 3];
-    if (alpha === 0) continue;
-    const t = alpha / 255;
-    const [r, g, b2] = rampColor(t, RAMPS.HEAT_RAMP);
-    data[i] = r;
-    data[i + 1] = g;
-    data[i + 2] = b2;
-    data[i + 3] = Math.min(235, 60 + alpha);
-  }
-  ctx.drawImage(off, 0, 0, w, h);
+  ctx.globalAlpha = 1;
 
   // 显示器边框与名称
   ctx.strokeStyle = "rgba(148,163,184,0.55)";
@@ -167,7 +151,10 @@ function onMove(e: MouseEvent) {
 }
 
 onMounted(render);
-watch(() => [props.cells, props.monitors, viewMode.value], render, { deep: true });
+watch(() => [props.cells, props.monitors, props.palette, viewMode.value], render, {
+  deep: true,
+  flush: "post",
+});
 onBeforeUnmount(() => {
   hover.value = null;
 });
@@ -183,7 +170,12 @@ onBeforeUnmount(() => {
         </n-radio-button>
       </n-radio-group>
       <span class="legend">
-        <span v-for="i in 5" :key="i" class="swatch" :style="{ background: rgbToCss(rampColor((i - 1) / 4, RAMPS.HEAT_RAMP)) }" />
+        <span
+          v-for="i in 5"
+          :key="i"
+          class="swatch"
+          :style="{ background: rgbToCss(rampColor((i - 1) / 4, getHeatmapRamp(props.palette))) }"
+        />
         <span class="legend-label">少 → 多</span>
       </span>
     </div>

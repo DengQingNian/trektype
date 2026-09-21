@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildColorMap,
   computeBounds,
+  getHeatmapRamp,
+  HEATMAP_PALETTES,
   normalize,
   percentile,
   rampColor,
@@ -26,6 +28,14 @@ describe("rampColor", () => {
     const hi = rampColor(1, RAMPS.HEAT_RAMP);
     expect(lo[2]).toBeGreaterThan(lo[0]); // 蓝多于红
     expect(hi[0]).toBeGreaterThan(hi[2]); // 红多于蓝
+  });
+
+  it("统一配色方案都提供完整的五段色带", () => {
+    expect(HEATMAP_PALETTES).toHaveLength(4);
+    for (const palette of HEATMAP_PALETTES) {
+      expect(getHeatmapRamp(palette.value)).toHaveLength(5);
+    }
+    expect(getHeatmapRamp("ocean")[0]).not.toEqual(getHeatmapRamp("sunset")[0]);
   });
 });
 

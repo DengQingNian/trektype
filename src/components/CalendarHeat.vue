@@ -9,13 +9,15 @@ import { NRadioGroup, NRadioButton } from "naive-ui";
 import type { EChartsOption } from "echarts";
 import EChart from "./EChart.vue";
 import { monthDays } from "../lib/date";
-import { computeBounds, normalize, rampColor, rgbToCss } from "../lib/colorscale";
+import { computeBounds, getHeatmapRamp, normalize, rampColor, rgbToCss, type HeatmapPalette } from "../lib/colorscale";
 import type { DayCount } from "../lib/ipc";
 
 const props = defineProps<{
   month: string;
   days: DayCount[];
   metric: "key" | "click";
+  /** 全局热力图配色方案 */
+  palette: HeatmapPalette;
 }>();
 const emit = defineEmits<{ (e: "select", date: string): void; (e: "update:metric", v: "key" | "click"): void }>();
 
@@ -34,9 +36,10 @@ const maxValue = computed(() => Math.max(0, ...series.value.map(([, v]) => v)));
 const option = computed<EChartsOption>(() => {
   const values = series.value.map(([, v]) => v);
   const bounds = computeBounds(values);
+  const heatRamp = getHeatmapRamp(props.palette);
   const cmap = (count: number) => {
     if (count <= 0) return "#f1f5f9";
-    return rgbToCss(rampColor(Math.max(0.10, normalize(count, bounds))));
+    return rgbToCss(rampColor(Math.max(0.10, normalize(count, bounds)), heatRamp));
   };
   const textColor = (count: number) => (normalize(count, bounds) > 0.55 ? "#ffffff" : "#334155");
 
@@ -119,7 +122,10 @@ function onChartClick(params: unknown) {
     <EChart :option="option" height="300px" @click="onChartClick" />
     <div class="legend">
       <span class="legend-label">少</span>
-      <span class="legend-bar" />
+      <span
+        class="legend-bar"
+        :style="{ background: `linear-gradient(90deg, ${getHeatmapRamp(props.palette).map(rgbToCss).join(', ')})` }"
+      />
       <span class="legend-label">多</span>
       <span class="max">当月单日最高：{{ maxValue.toLocaleString() }}</span>
     </div>

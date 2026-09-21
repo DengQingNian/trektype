@@ -12,12 +12,14 @@ import {
   placeKeys,
   type LayoutDef,
 } from "../lib/layout";
-import { buildColorMap, computeBounds, normalize } from "../lib/colorscale";
+import { buildColorMap, computeBounds, getHeatmapRamp, normalize, rgbToCss, type HeatmapPalette } from "../lib/colorscale";
 
 const props = defineProps<{
   /** 键码 → 次数（来自 get_keyboard_stats.keys） */
   counts: Record<string, number>;
   total: number;
+  /** 全局热力图配色方案 */
+  palette: HeatmapPalette;
 }>();
 
 const layoutId = ref<string>(ANSI_104.id);
@@ -32,7 +34,14 @@ const U = 40;
 const GAP = 3; // 键间空隙
 const PAD = 8;
 
-const colorMap = computed(() => buildColorMap(new Map(Object.entries(props.counts))));
+const colorMap = computed(() =>
+  buildColorMap(
+    new Map(Object.entries(props.counts)),
+    "#f1f5f9",
+    0.12,
+    getHeatmapRamp(props.palette),
+  ),
+);
 const scaleBounds = computed(() => computeBounds(Object.values(props.counts)));
 
 function countOf(code: string): number {
@@ -73,7 +82,7 @@ defineExpose({ maxCount, hottest });
       </n-radio-group>
       <div class="legend">
         <span class="legend-label">低</span>
-        <span class="legend-bar" />
+        <span class="legend-bar" :style="{ background: `linear-gradient(90deg, ${getHeatmapRamp(props.palette).map(rgbToCss).join(', ')})` }" />
         <span class="legend-label">高</span>
       </div>
     </div>

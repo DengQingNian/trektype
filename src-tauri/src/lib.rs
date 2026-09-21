@@ -173,6 +173,7 @@ pub fn run() {
             commands::set_paused,
             commands::grant_consent,
             commands::get_overview,
+            commands::get_activity_trend,
             commands::get_keyboard_stats,
             commands::get_mouse_stats,
             commands::get_calendar_stats,

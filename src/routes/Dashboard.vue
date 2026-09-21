@@ -1,12 +1,15 @@
 <script setup lang="ts">
-/** 概览：今日三指标 + 近 7 天趋势 + 24 小时分布 + 运行状态。 */
+/** 概览：动态粒度趋势 + 24 小时偏好 + 轻量洞察 + 运行状态。 */
 import { NAlert, NCard, NGrid, NGi, NSpin, NStatistic, NTag } from "naive-ui";
 import { computed, onMounted, ref, watch } from "vue";
 import type { EChartsOption } from "echarts";
 import EChart from "../components/EChart.vue";
+import RangePicker from "../components/RangePicker.vue";
+import { daysBetween, trendGranularity } from "../lib/date";
 import { useRangeStore } from "../stores/range";
 import { useRuntimeStore } from "../stores/runtime";
-import { api, formatBytes, formatNumber, type KeyboardStats, type Overview } from "../lib/ipc";
+import { api, formatBytes, formatNumber, type KeyboardStats, type Overview, type TrendPoint } from "../lib/ipc";
+import { completeTrend, summarizeTrend, trendLabel } from "../lib/trend";
 import { toastError } from "../lib/ui";
 
 const range = useRangeStore();
@@ -14,17 +17,29 @@ const runtime = useRuntimeStore();
 const loading = ref(false);
 const overview = ref<Overview | null>(null);
 const keyboard = ref<KeyboardStats | null>(null);
+const trend = ref<TrendPoint[]>([]);
+
+const granularity = computed(() =>
+  trendGranularity(range.kind, range.range.start_date, range.range.end_date),
+);
+const granularityLabel = computed(() => {
+  if (granularity.value === "hour") return "当天按小时";
+  if (granularity.value === "month") return range.kind === "year" ? "本年按月" : "按月";
+  return "按天";
+});
 
 async function load() {
   loading.value = true;
   try {
     const r = range.range;
-    const [ov, kb] = await Promise.all([
+    const [ov, kb, tr] = await Promise.all([
       api.getOverview(r.start_date, r.end_date),
       api.getKeyboardStats(r.start_date, r.end_date),
+      api.getActivityTrend(r.start_date, r.end_date, granularity.value),
     ]);
     overview.value = ov;
     keyboard.value = kb;
+    trend.value = tr;
   } catch (e) {
     toastError(e, "加载概览失败");
   } finally {
@@ -32,13 +47,22 @@ async function load() {
   }
 }
 
+const completedTrend = computed(() =>
+  completeTrend(
+    trend.value,
+    range.range.start_date,
+    range.range.end_date,
+    granularity.value,
+  ),
+);
+
 const trendOption = computed<EChartsOption>(() => ({
   tooltip: { trigger: "axis" },
   legend: { data: ["按键", "点击"], top: 0, textStyle: { fontSize: 11 } },
   grid: { left: 44, right: 16, top: 30, bottom: 24 },
   xAxis: {
     type: "category",
-    data: (overview.value?.by_day ?? []).map((d) => d.date.slice(5)),
+    data: completedTrend.value.map((point) => trendLabel(point.bucket, granularity.value)),
     axisLabel: { fontSize: 10 },
   },
   yAxis: { type: "value", axisLabel: { fontSize: 10 } },
@@ -49,7 +73,7 @@ const trendOption = computed<EChartsOption>(() => ({
       smooth: true,
       areaStyle: { opacity: 0.12 },
       itemStyle: { color: "#2563eb" },
-      data: (overview.value?.by_day ?? []).map((d) => d.key_count),
+      data: completedTrend.value.map((point) => point.key_count),
     },
     {
       name: "点击",
@@ -57,10 +81,30 @@ const trendOption = computed<EChartsOption>(() => ({
       smooth: true,
       areaStyle: { opacity: 0.12 },
       itemStyle: { color: "#f97316" },
-      data: (overview.value?.by_day ?? []).map((d) => d.click_count),
+      data: completedTrend.value.map((point) => point.click_count),
     },
   ],
 }));
+
+const trendSummary = computed(() => summarizeTrend(completedTrend.value));
+const peakLabel = computed(() => {
+  const peak = trendSummary.value.peak;
+  if (!peak || peak.key_count + peak.click_count === 0) return "暂无数据";
+  return trendLabel(peak.bucket, granularity.value);
+});
+const peakCount = computed(() => {
+  const peak = trendSummary.value.peak;
+  return peak ? peak.key_count + peak.click_count : 0;
+});
+const peakTitle = computed(() => {
+  if (granularity.value === "hour") return "峰值时段";
+  if (granularity.value === "day") return "峰值日期";
+  return "峰值月份";
+});
+const averagePerDay = computed(() => {
+  const days = daysBetween(range.range.start_date, range.range.end_date);
+  return days > 0 ? Math.round(trendSummary.value.total / days) : 0;
+});
 
 const hourOption = computed<EChartsOption>(() => ({
   tooltip: { trigger: "axis" },
@@ -89,7 +133,7 @@ watch(() => range.range, load, { deep: true });
   <div class="page">
     <div class="head">
       <h2>概览</h2>
-      <span class="range-hint">{{ range.range.start_date }} ~ {{ range.range.end_date }}</span>
+      <RangePicker />
     </div>
 
     <n-alert v-if="runtime.state && !runtime.state.writer_ready" type="warning" class="mb">
@@ -100,7 +144,7 @@ watch(() => range.range, load, { deep: true });
     </n-alert>
 
     <n-spin :show="loading">
-      <n-grid :cols="3" :x-gap="12" class="mb">
+      <n-grid :cols="4" :x-gap="12" class="mb">
         <n-gi>
           <n-card size="small">
             <n-statistic label="按键次数" :value="formatNumber(overview?.key_total ?? 0)" />
@@ -113,16 +157,39 @@ watch(() => range.range, load, { deep: true });
         </n-gi>
         <n-gi>
           <n-card size="small">
+            <n-statistic label="活跃天数" :value="`${overview?.day_count ?? 0} 天`" />
+          </n-card>
+        </n-gi>
+        <n-gi>
+          <n-card size="small">
             <n-statistic label="活跃小时（估算）" :value="`${overview?.active_hours ?? 0} 小时`" />
           </n-card>
         </n-gi>
       </n-grid>
 
-      <n-card size="small" title="趋势" class="mb">
+      <n-card size="small" :title="`趋势 · ${granularityLabel}`" class="mb">
         <EChart :option="trendOption" height="240px" />
       </n-card>
 
-      <n-card size="small" title="24 小时分布（按键）">
+      <div class="insights mb">
+        <n-card size="small">
+          <span class="insight-label">{{ peakTitle }}</span>
+          <strong>{{ peakLabel }}</strong>
+          <small>{{ peakCount ? `${formatNumber(peakCount)} 次事件` : "暂无记录" }}</small>
+        </n-card>
+        <n-card size="small">
+          <span class="insight-label">日均事件</span>
+          <strong>{{ formatNumber(averagePerDay) }}</strong>
+          <small>按键 + 点击</small>
+        </n-card>
+        <n-card size="small">
+          <span class="insight-label">活跃时间占比</span>
+          <strong>{{ `${Math.min(100, Math.round((overview?.active_hours ?? 0) / Math.max(1, daysBetween(range.range.start_date, range.range.end_date) * 24) * 100))}%` }}</strong>
+          <small>活跃小时 / 范围小时</small>
+        </n-card>
+      </div>
+
+      <n-card size="small" title="按键时段偏好（范围累计）">
         <EChart :option="hourOption" height="200px" />
       </n-card>
     </n-spin>
@@ -166,12 +233,27 @@ h2 {
   margin: 0;
   font-size: 18px;
 }
-.range-hint {
-  font-size: 12px;
-  color: #64748b;
-}
 .mb {
   margin-bottom: 12px;
+}
+.insights {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.insights :deep(.n-card__content) {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.insight-label,
+.insights small {
+  color: #64748b;
+  font-size: 12px;
+}
+.insights strong {
+  color: #0f172a;
+  font-size: 18px;
 }
 .mt {
   margin-top: 12px;

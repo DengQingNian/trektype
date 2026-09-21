@@ -3,6 +3,8 @@
  * 所有调用集中在此，页面不直接使用 `invoke`。
  */
 import { invoke } from "@tauri-apps/api/core";
+import type { TrendGranularity } from "./date";
+import type { HeatmapPalette } from "./colorscale";
 
 // ---------- 与 src-tauri/src/config.rs 对应 ----------
 
@@ -17,6 +19,8 @@ export interface AppConfig {
   privacy_mode: boolean;
   raw_retention_days: number;
   grid_cell_size: number;
+  /** 统一热力图配色方案 */
+  heatmap_palette: HeatmapPalette;
   blacklist_keys: string[];
   blacklist_mouse: string[];
   pause_hotkey: string;
@@ -62,6 +66,13 @@ export interface Overview {
   active_hours: number;
   day_count: number;
   by_day: DayCount[];
+}
+
+export interface TrendPoint {
+  /** hour=YYYY-MM-DDTHH，day=YYYY-MM-DD，month=YYYY-MM */
+  bucket: string;
+  key_count: number;
+  click_count: number;
 }
 
 export interface KeyCount {
@@ -151,6 +162,12 @@ export const api = {
 
   getOverview: (start: string, end: string) =>
     invoke<Overview>("get_overview", { startDate: start, endDate: end }),
+  getActivityTrend: (start: string, end: string, granularity: TrendGranularity) =>
+    invoke<TrendPoint[]>("get_activity_trend", {
+      startDate: start,
+      endDate: end,
+      granularity,
+    }),
   getKeyboardStats: (start: string, end: string) =>
     invoke<KeyboardStats>("get_keyboard_stats", { startDate: start, endDate: end }),
   getMouseStats: (start: string, end: string) =>

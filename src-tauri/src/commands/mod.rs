@@ -150,6 +150,28 @@ pub fn get_overview(
     query::overview(&state.db(), &start_date, &end_date, with_repeat).map_err(|e| e.to_string())
 }
 
+/// 活动趋势：粒度为 hour/day/month，分别对应当天/周月/年的展示口径。
+#[tauri::command]
+pub fn get_activity_trend(
+    state: State<'_, AppState>,
+    start_date: String,
+    end_date: String,
+    granularity: String,
+) -> Result<Vec<query::TrendPoint>, String> {
+    if !matches!(granularity.as_str(), "hour" | "day" | "month") {
+        return Err(format!("不支持的趋势粒度：{granularity}"));
+    }
+    let with_repeat = state.config().repeat_counts;
+    query::activity_trend(
+        &state.db(),
+        &start_date,
+        &end_date,
+        &granularity,
+        with_repeat,
+    )
+    .map_err(|e| e.to_string())
+}
+
 /// 键盘统计：按键明细 + 小时分布。
 #[tauri::command]
 pub fn get_keyboard_stats(

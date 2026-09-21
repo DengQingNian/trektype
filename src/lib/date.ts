@@ -10,7 +10,8 @@ export interface DateRange {
   end_date: string;
 }
 
-export type RangeKind = "day" | "week" | "month" | "custom";
+export type RangeKind = "day" | "week" | "month" | "year" | "custom";
+export type TrendGranularity = "hour" | "day" | "month";
 
 function pad(n: number): string {
   return n < 10 ? `0${n}` : String(n);
@@ -60,7 +61,15 @@ export function startOfMonth(date: string): string {
   return toDateString(d);
 }
 
-/** 预设范围：日=当天；周=本周一至周日；月=当月 1 日至月末。 */
+export function startOfYear(date: string): string {
+  return `${parseDate(date).getFullYear()}-01-01`;
+}
+
+export function endOfYear(date: string): string {
+  return `${parseDate(date).getFullYear()}-12-31`;
+}
+
+/** 预设范围：日=当天；周=本周一至周日；月=当月；年=自然年。 */
 export function presetRange(kind: Exclude<RangeKind, "custom">, anchor = todayLocal()): DateRange {
   switch (kind) {
     case "day":
@@ -71,7 +80,25 @@ export function presetRange(kind: Exclude<RangeKind, "custom">, anchor = todayLo
     }
     case "month":
       return { start_date: startOfMonth(anchor), end_date: endOfMonth(anchor) };
+    case "year":
+      return { start_date: startOfYear(anchor), end_date: endOfYear(anchor) };
   }
+}
+
+/** 根据范围决定趋势图粒度；自定义范围按长度自动选择，避免轴标签拥挤。 */
+export function trendGranularity(
+  kind: RangeKind,
+  start: string,
+  end: string,
+): TrendGranularity {
+  if (kind === "day") return "hour";
+  if (kind === "week" || kind === "month") return "day";
+  if (kind === "year") return "month";
+
+  const days = daysBetween(start, end);
+  if (days <= 1) return "hour";
+  if (days <= 62) return "day";
+  return "month";
 }
 
 /** 范围内天数（闭区间）。 */

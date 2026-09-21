@@ -8,13 +8,16 @@ import { api, BUTTON_LABELS, formatNumber, type DayCount, type DayDetail } from 
 import { monthOf, parseDate, toDateString, todayLocal } from "../lib/date";
 import { defaultLabel } from "../lib/layout";
 import { toastError } from "../lib/ui";
+import { useSettingsStore } from "../stores/settings";
 
 const monthTs = ref<number>(parseDate(todayLocal()).getTime());
+const settings = useSettingsStore();
 const metric = ref<"key" | "click">("key");
 const loading = ref(false);
 const days = ref<DayCount[]>([]);
 const selected = ref<string | null>(null);
 const detail = ref<DayDetail | null>(null);
+const palette = computed(() => settings.config?.heatmap_palette ?? "classic");
 
 const month = computed(() => monthOf(toDateString(new Date(monthTs.value))));
 
@@ -71,7 +74,10 @@ const detailButtons = computed(() =>
   })),
 );
 
-onMounted(loadMonth);
+onMounted(async () => {
+  if (!settings.config) await settings.load();
+  await loadMonth();
+});
 watch(month, loadMonth);
 </script>
 
@@ -98,6 +104,7 @@ watch(month, loadMonth);
           :month="month"
           :days="days"
           :metric="metric"
+          :palette="palette"
           @update:metric="(v) => (metric = v)"
           @select="selectDate"
         />

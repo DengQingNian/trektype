@@ -6,13 +6,16 @@ import KeyboardHeatmap from "../components/KeyboardHeatmap.vue";
 import RangePicker from "../components/RangePicker.vue";
 import TopList from "../components/TopList.vue";
 import { useRangeStore } from "../stores/range";
+import { useSettingsStore } from "../stores/settings";
 import { api, formatNumber, type KeyboardStats } from "../lib/ipc";
 import { defaultLabel } from "../lib/layout";
 import { toastError } from "../lib/ui";
 
 const range = useRangeStore();
+const settings = useSettingsStore();
 const loading = ref(false);
 const stats = ref<KeyboardStats | null>(null);
+const palette = computed(() => settings.config?.heatmap_palette ?? "classic");
 
 const counts = computed<Record<string, number>>(() => {
   const out: Record<string, number> = {};
@@ -44,7 +47,10 @@ async function load() {
   }
 }
 
-onMounted(load);
+onMounted(async () => {
+  if (!settings.config) await settings.load();
+  await load();
+});
 watch(() => range.range, load, { deep: true });
 </script>
 
@@ -65,7 +71,7 @@ watch(() => range.range, load, { deep: true });
       </div>
 
       <n-card size="small" class="mb">
-        <KeyboardHeatmap :counts="counts" :total="stats?.total ?? 0" />
+        <KeyboardHeatmap :counts="counts" :total="stats?.total ?? 0" :palette="palette" />
       </n-card>
 
       <n-card size="small" title="Top 键位">

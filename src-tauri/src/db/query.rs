@@ -15,6 +15,14 @@ pub struct DayCount {
     pub click_count: i64,
 }
 
+/// 趋势图数据点：hour=YYYY-MM-DDTHH，day=YYYY-MM-DD，month=YYYY-MM。
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct TrendPoint {
+    pub bucket: String,
+    pub key_count: i64,
+    pub click_count: i64,
+}
+
 /// 概览页数据。
 #[derive(Debug, Clone, Serialize, PartialEq, Default)]
 pub struct Overview {
@@ -187,6 +195,94 @@ pub fn overview(
         day_count: days.len() as i64,
         by_day: days.into_values().collect(),
     })
+}
+
+/// 活动趋势：当天按小时、周/月按天、年按月。
+///
+/// 返回有数据的桶，缺失桶由前端补零，这样数据库查询不会为长时间范围制造大量空行。
+pub fn activity_trend(
+    conn: &Connection,
+    start: &str,
+    end: &str,
+    granularity: &str,
+    with_repeat: bool,
+) -> rusqlite::Result<Vec<TrendPoint>> {
+    match granularity {
+        "hour" => {
+            let hour_expr = if with_repeat {
+                "(key_count + repeat_count)"
+            } else {
+                "key_count"
+            };
+            let mut stmt = conn.prepare(&format!(
+                "SELECT date || 'T' || printf('%02d', hour), SUM({hour_expr}), SUM(click_count)
+                 FROM agg_hour_daily
+                 WHERE date >= ?1 AND date <= ?2
+                 GROUP BY date, hour ORDER BY date, hour"
+            ))?;
+            let rows = stmt.query_map(params![start, end], |r| {
+                Ok(TrendPoint {
+                    bucket: r.get(0)?,
+                    key_count: r.get(1)?,
+                    click_count: r.get(2)?,
+                })
+            })?;
+            rows.collect()
+        }
+        "day" | "month" => {
+            let expr = key_expr(with_repeat);
+            let bucket_expr = if granularity == "day" {
+                "date"
+            } else {
+                "substr(date, 1, 7)"
+            };
+            let mut points: BTreeMap<String, TrendPoint> = BTreeMap::new();
+            {
+                let mut stmt = conn.prepare(&format!(
+                    "SELECT {bucket_expr}, SUM({expr}) FROM agg_key_daily
+                     WHERE date >= ?1 AND date <= ?2 GROUP BY {bucket_expr}"
+                ))?;
+                let rows = stmt.query_map(params![start, end], |r| {
+                    Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))
+                })?;
+                for row in rows {
+                    let (bucket, count) = row?;
+                    points
+                        .entry(bucket.clone())
+                        .or_insert(TrendPoint {
+                            bucket,
+                            key_count: 0,
+                            click_count: 0,
+                        })
+                        .key_count = count;
+                }
+            }
+            {
+                let mut stmt = conn.prepare(&format!(
+                    "SELECT {bucket_expr}, SUM(count) FROM agg_mouse_daily
+                     WHERE date >= ?1 AND date <= ?2 GROUP BY {bucket_expr}"
+                ))?;
+                let rows = stmt.query_map(params![start, end], |r| {
+                    Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))
+                })?;
+                for row in rows {
+                    let (bucket, count) = row?;
+                    points
+                        .entry(bucket.clone())
+                        .or_insert(TrendPoint {
+                            bucket,
+                            key_count: 0,
+                            click_count: 0,
+                        })
+                        .click_count = count;
+                }
+            }
+            Ok(points.into_values().collect())
+        }
+        _ => Err(rusqlite::Error::InvalidParameterName(format!(
+            "不支持的趋势粒度：{granularity}"
+        ))),
+    }
 }
 
 /// 键盘统计：按键明细（降序）+ 24 小时分布。
@@ -550,6 +646,37 @@ mod tests {
         let empty = overview(&conn, "2025-01-01", "2025-01-02", false).unwrap();
         assert_eq!(empty.key_total, 0);
         assert_eq!(empty.day_count, 0);
+    }
+
+    /// 趋势按小时/天/月聚合且排序稳定；小时趋势也遵循 repeat 开关。
+    #[test]
+    fn activity_trend_switches_granularity_and_repeat() {
+        let mut conn = open_in_memory().unwrap();
+        seed(&mut conn);
+        let d1 = date_of(ts_at(2026, 1, 31, 10, 0));
+        let d3 = date_of(ts_at(2026, 2, 2, 10, 0));
+
+        let hourly = activity_trend(&conn, &d1, &d3, "hour", false).unwrap();
+        assert_eq!(hourly.len(), 3, "3 个有数据的日期小时桶");
+        assert_eq!(hourly[0].bucket, format!("{d1}T10"));
+        assert_eq!((hourly[0].key_count, hourly[0].click_count), (3, 3));
+        assert_eq!(hourly.iter().map(|p| p.key_count).sum::<i64>(), 5);
+
+        let hourly_with_repeat = activity_trend(&conn, &d1, &d3, "hour", true).unwrap();
+        assert_eq!(
+            hourly_with_repeat[0].key_count, 4,
+            "开启 repeat 后小时桶应包含自动重复"
+        );
+
+        let daily = activity_trend(&conn, &d1, &d3, "day", false).unwrap();
+        assert_eq!(daily.iter().map(|p| p.key_count).sum::<i64>(), 5);
+        assert_eq!(daily.iter().map(|p| p.click_count).sum::<i64>(), 4);
+
+        let monthly = activity_trend(&conn, &d1, &d3, "month", false).unwrap();
+        assert_eq!(monthly.len(), 2);
+        assert_eq!(monthly[0].bucket, &d1[..7]);
+        assert_eq!((monthly[0].key_count, monthly[0].click_count), (3, 3));
+        assert_eq!((monthly[1].key_count, monthly[1].click_count), (2, 1));
     }
 
     /// 键盘统计：降序排序、总数、24 小时分布合计一致。

@@ -7,6 +7,10 @@ use std::path::Path;
 
 /// 热力图网格允许的粒度（px）。聚合按 24px 基准存储，查询层只支持向更粗粒度合并。
 pub const ALLOWED_GRID_CELLS: [u32; 3] = [24, 32, 64];
+/// 热力图统一配色方案（前端以同名值渲染键盘/日历/屏幕热力图）。
+pub const ALLOWED_HEATMAP_PALETTES: [&str; 4] = ["classic", "ocean", "sunset", "forest"];
+/// 默认热力图配色：经典蓝绿黄红，冷热层次最直观。
+pub const DEFAULT_HEATMAP_PALETTE: &str = "classic";
 /// 默认 raw 明细保留天数（聚合永久保留）。
 pub const DEFAULT_RETENTION_DAYS: u32 = 90;
 /// 保留期上限（约 10 年）。
@@ -36,6 +40,8 @@ pub struct AppConfig {
     pub raw_retention_days: u32,
     /// 热力图网格粒度（px，仅允许 ALLOWED_GRID_CELLS）
     pub grid_cell_size: u32,
+    /// 统一热力图配色方案（classic/ocean/sunset/forest）
+    pub heatmap_palette: String,
     /// 键盘黑名单（exe 名，支持 `*` / `?` 通配）
     pub blacklist_keys: Vec<String>,
     /// 鼠标黑名单（exe 名，支持 `*` / `?` 通配）
@@ -63,6 +69,7 @@ impl Default for AppConfig {
             privacy_mode: false,
             raw_retention_days: DEFAULT_RETENTION_DAYS,
             grid_cell_size: 24,
+            heatmap_palette: DEFAULT_HEATMAP_PALETTE.to_string(),
             blacklist_keys: Vec::new(),
             blacklist_mouse: Vec::new(),
             pause_hotkey: DEFAULT_PAUSE_HOTKEY.to_string(),
@@ -110,6 +117,9 @@ impl AppConfig {
         if !ALLOWED_GRID_CELLS.contains(&self.grid_cell_size) {
             self.grid_cell_size = 24;
         }
+        if !ALLOWED_HEATMAP_PALETTES.contains(&self.heatmap_palette.as_str()) {
+            self.heatmap_palette = DEFAULT_HEATMAP_PALETTE.to_string();
+        }
         self.raw_retention_days = self.raw_retention_days.clamp(1, MAX_RETENTION_DAYS);
         self.blacklist_keys.retain(|s| !s.trim().is_empty());
         self.blacklist_mouse.retain(|s| !s.trim().is_empty());
@@ -144,6 +154,7 @@ mod tests {
         assert!(!c.autostart);
         assert_eq!(c.raw_retention_days, DEFAULT_RETENTION_DAYS);
         assert_eq!(c.grid_cell_size, 24);
+        assert_eq!(c.heatmap_palette, DEFAULT_HEATMAP_PALETTE);
         assert!(c.blacklist_keys.is_empty());
     }
 
@@ -195,6 +206,7 @@ mod tests {
     fn normalized_fixes_invalid_values() {
         let raw = r#"{
             "grid_cell_size": 16,
+            "heatmap_palette": "unknown",
             "raw_retention_days": 0,
             "blacklist_keys": ["keepass*", "  ", ""],
             "pause_hotkey": "  "
@@ -202,6 +214,10 @@ mod tests {
         let c: AppConfig = serde_json::from_str(raw).unwrap();
         let c = c.normalized();
         assert_eq!(c.grid_cell_size, 24, "不支持的粒度应回退 24");
+        assert_eq!(
+            c.heatmap_palette, DEFAULT_HEATMAP_PALETTE,
+            "不支持的配色应回退经典热力"
+        );
         assert_eq!(c.raw_retention_days, 1, "下限 1 天");
         assert_eq!(
             c.blacklist_keys,

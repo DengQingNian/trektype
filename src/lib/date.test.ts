@@ -9,6 +9,9 @@ import {
   presetRange,
   startOfMonth,
   startOfWeek,
+  startOfYear,
+  endOfYear,
+  trendGranularity,
 } from "./date";
 
 describe("presetRange", () => {
@@ -48,6 +51,15 @@ describe("presetRange", () => {
       end_date: "2025-02-28",
     });
   });
+
+  it("年 = 自然年 1 月 1 日至 12 月 31 日", () => {
+    expect(presetRange("year", "2024-02-10")).toEqual({
+      start_date: "2024-01-01",
+      end_date: "2024-12-31",
+    });
+    expect(startOfYear("2026-09-21")).toBe("2026-01-01");
+    expect(endOfYear("2026-09-21")).toBe("2026-12-31");
+  });
 });
 
 describe("日期运算边界", () => {
@@ -86,5 +98,15 @@ describe("日期运算边界", () => {
     expect(monthDays("2026-09")[0]).toBe("2026-09-01");
     expect(monthDays("2026-09")[29]).toBe("2026-09-30");
     expect(monthDays("2024-02")).toHaveLength(29);
+  });
+
+  it("趋势粒度按预设范围映射，自定义范围按长度降级", () => {
+    expect(trendGranularity("day", "2026-09-21", "2026-09-21")).toBe("hour");
+    expect(trendGranularity("week", "2026-09-21", "2026-09-27")).toBe("day");
+    expect(trendGranularity("month", "2026-09-01", "2026-09-30")).toBe("day");
+    expect(trendGranularity("year", "2026-01-01", "2026-12-31")).toBe("month");
+    expect(trendGranularity("custom", "2026-09-21", "2026-09-21")).toBe("hour");
+    expect(trendGranularity("custom", "2026-09-01", "2026-10-31")).toBe("day");
+    expect(trendGranularity("custom", "2026-01-01", "2026-12-31")).toBe("month");
   });
 });

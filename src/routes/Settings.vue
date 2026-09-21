@@ -16,6 +16,7 @@ import {
 } from "naive-ui";
 import { computed, onMounted, ref, watch } from "vue";
 import { api, type AppConfig, type AppRow } from "../lib/ipc";
+import { getHeatmapRamp, HEATMAP_PALETTES, rgbToCss } from "../lib/colorscale";
 import { message, toastError } from "../lib/ui";
 import { useSettingsStore } from "../stores/settings";
 
@@ -27,9 +28,18 @@ let saveTimer: number | null = null;
 
 const retentionOptions = [30, 90, 180, 365].map((d) => ({ label: `${d} 天`, value: d }));
 const cellOptions = [24, 32, 64].map((v) => ({ label: `${v} px`, value: v }));
+const paletteOptions = HEATMAP_PALETTES.map((palette) => ({
+  label: `${palette.label}（${palette.description}）`,
+  value: palette.value,
+}));
 const appOptions = computed(() =>
   knownApps.value.map((a) => ({ label: `${a.exe_name}（最近使用）`, value: a.exe_name })),
 );
+const palettePreview = computed(() => {
+  const palette = form.value?.heatmap_palette ?? "classic";
+  const colors = getHeatmapRamp(palette).map(rgbToCss).join(", ");
+  return { background: `linear-gradient(90deg, ${colors})` };
+});
 
 async function load() {
   if (!settings.config) await settings.load();
@@ -138,6 +148,11 @@ onMounted(load);
           <n-select v-model:value="form.grid_cell_size" :options="cellOptions" style="width: 140px" />
           <span class="desc">只支持向更粗粒度切换（聚合按 24px 基准存储）</span>
         </n-form-item>
+        <n-form-item label="热力图配色">
+          <n-select v-model:value="form.heatmap_palette" :options="paletteOptions" style="width: 220px" />
+          <span class="palette-preview" :style="palettePreview" aria-label="当前热力图配色预览" />
+          <span class="desc">键盘、日历、鼠标热力图统一使用此配色</span>
+        </n-form-item>
       </n-form>
     </n-card>
 
@@ -230,6 +245,15 @@ h2 {
   font-size: 12px;
   color: #64748b;
   line-height: 1.6;
+}
+.palette-preview {
+  display: inline-block;
+  width: 120px;
+  height: 12px;
+  margin-left: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 6px;
+  vertical-align: middle;
 }
 .desc-block {
   font-size: 12.5px;

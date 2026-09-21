@@ -114,3 +114,8 @@ CREATE TABLE agg_hour_daily (
   PRIMARY KEY (date, hour)
 );
 "#;
+
+/// v2：小时聚合补充自动重复按键计数，使趋势图与全局 repeat_counts 口径一致。
+pub const V2: &str = r#"
+ALTER TABLE agg_hour_daily ADD COLUMN repeat_count INTEGER NOT NULL DEFAULT 0;
+"#;
