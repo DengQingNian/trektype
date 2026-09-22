@@ -36,6 +36,23 @@ Tauri 的 NSIS bundler 需要 NSIS 3.11 及 `nsis_tauri_utils.dll`。默认会�
 
 命令应输出 `v3.11`。确认后重新执行 `pnpm tauri build`；必要时使用有权限访问 `%LOCALAPPDATA%\tauri\NSIS` 的终端运行。
 
+### GitHub 下载失败时使用代理
+
+某些网络环境无法稳定访问 GitHub，Tauri 自动下载 NSIS 可能因此超时或失败。此时使用以下代理地址下载原始压缩包，再按上面的目录结构解压和补齐缓存文件：
+
+<https://gh-proxy.org/https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.11/nsis-3.11.zip>
+
+PowerShell 示例：
+
+```powershell
+$nsisZip = Join-Path $env:TEMP "nsis-3.11.zip"
+Invoke-WebRequest `
+  -Uri "https://gh-proxy.org/https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.11/nsis-3.11.zip" `
+  -OutFile $nsisZip
+```
+
+代理只用于下载，不能替代 NSIS 缓存目录配置；下载完成后仍需将内容放入 `%LOCALAPPDATA%\tauri\NSIS`，并确认 `makensis.exe /VERSION` 输出 `v3.11`。如果代理返回的不是 ZIP 文件，应先删除该文件并检查网络代理响应，再重新下载。
+
 ## 构建验证
 
 构建结束后可以用以下命令确认产物存在并查看大小：
