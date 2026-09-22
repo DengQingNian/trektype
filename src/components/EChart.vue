@@ -37,5 +37,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="el" :style="{ width: '100%', height: height ?? '260px' }" />
+  <div ref="el" class="chart-frame" :style="{ width: '100%', height: height ?? '260px' }" />
 </template>
+
+<style scoped>
+.chart-frame {
+  min-width: 0;
+}
+</style>

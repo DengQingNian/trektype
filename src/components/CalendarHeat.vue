@@ -6,6 +6,7 @@
  */
 import { computed } from "vue";
 import { NRadioGroup, NRadioButton } from "naive-ui";
+import { Cursor2, Keyboard } from "@vicons/carbon";
 import type { EChartsOption } from "echarts";
 import EChart from "./EChart.vue";
 import { monthDays } from "../lib/date";
@@ -32,6 +33,7 @@ const series = computed(() => {
 });
 
 const maxValue = computed(() => Math.max(0, ...series.value.map(([, v]) => v)));
+const paletteColors = computed(() => getHeatmapRamp(props.palette).map(rgbToCss));
 
 const option = computed<EChartsOption>(() => {
   const values = series.value.map(([, v]) => v);
@@ -114,18 +116,17 @@ function onChartClick(params: unknown) {
         size="small"
         @update:value="(v: string | number) => emit('update:metric', v as 'key' | 'click')"
       >
-        <n-radio-button value="key">键盘</n-radio-button>
-        <n-radio-button value="click">鼠标</n-radio-button>
+        <n-radio-button value="key"><Keyboard class="ui-icon button-icon" />键盘</n-radio-button>
+        <n-radio-button value="click"><Cursor2 class="ui-icon button-icon" />鼠标</n-radio-button>
       </n-radio-group>
       <span class="hint">色深 = 当日活跃度（对数色阶）；点击日期查看详情</span>
     </div>
     <EChart :option="option" height="300px" @click="onChartClick" />
     <div class="legend">
       <span class="legend-label">少</span>
-      <span
-        class="legend-bar"
-        :style="{ background: `linear-gradient(90deg, ${getHeatmapRamp(props.palette).map(rgbToCss).join(', ')})` }"
-      />
+      <span class="legend-bar">
+        <i v-for="color in paletteColors" :key="color" :style="{ backgroundColor: color }" />
+      </span>
       <span class="legend-label">多</span>
       <span class="max">当月单日最高：{{ maxValue.toLocaleString() }}</span>
     </div>
@@ -147,20 +148,26 @@ function onChartClick(params: unknown) {
 }
 .hint {
   font-size: 12px;
-  color: #64748b;
+  color: var(--ink-soft);
 }
 .legend {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: #64748b;
+  color: var(--ink-soft);
 }
 .legend-bar {
   width: 110px;
   height: 10px;
-  border-radius: 5px;
-  background: linear-gradient(90deg, #e8f0fe, #93c5fd, #3b82f6, #1d4ed8, #172554);
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px dashed var(--ink);
+  border-radius: 2px;
+}
+.legend-bar i {
+  flex: 1;
+  display: block;
 }
 .max {
   margin-left: 12px;

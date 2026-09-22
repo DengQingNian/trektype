@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /** 日历统计页：月历热力图（键盘/鼠标切换）+ 点击某日查看详情。 */
 import { NButton, NCard, NDatePicker, NSpin, NStatistic } from "naive-ui";
+import { ArrowLeft, ArrowRight, Calendar, CalendarHeatMap, Cursor2, Information, Keyboard } from "@vicons/carbon";
 import { computed, onMounted, ref, watch } from "vue";
 import CalendarHeat from "../components/CalendarHeat.vue";
 import TopList from "../components/TopList.vue";
@@ -84,22 +85,27 @@ watch(month, loadMonth);
 <template>
   <div class="page">
     <div class="head">
-      <h2>日历统计</h2>
+      <div class="head-copy">
+        <span class="eyebrow">CALENDAR / 04</span>
+      <h2 class="title-row"><Calendar class="ui-icon title-icon" />日历统计</h2>
+        <p>把一个月摊开，找到节奏最浓的那几天。</p>
+      </div>
       <div class="tools">
-        <n-button size="small" @click="shiftMonth(-1)">上个月</n-button>
+        <n-button size="small" @click="shiftMonth(-1)"><template #icon><ArrowLeft class="button-icon" /></template>上个月</n-button>
         <n-date-picker v-model:value="monthTs" type="month" size="small" :clearable="false" style="width: 140px" />
-        <n-button size="small" @click="shiftMonth(1)">下个月</n-button>
+        <n-button size="small" @click="shiftMonth(1)"><template #icon><ArrowRight class="button-icon" /></template>下个月</n-button>
       </div>
     </div>
 
     <n-spin :show="loading">
-      <div class="stats-row">
-        <n-card size="small"><n-statistic label="本月按键" :value="formatNumber(monthSummary.keyTotal)" /></n-card>
-        <n-card size="small"><n-statistic label="本月点击" :value="formatNumber(monthSummary.clickTotal)" /></n-card>
-        <n-card size="small"><n-statistic label="有记录天数" :value="`${monthSummary.activeDays} 天`" /></n-card>
+      <div class="stats-row stagger-children">
+        <n-card size="small" style="--stagger-index: 0"><div class="stat-card"><Keyboard class="ui-icon metric-icon" /><n-statistic label="本月按键" :value="formatNumber(monthSummary.keyTotal)" /></div></n-card>
+        <n-card size="small" style="--stagger-index: 1"><div class="stat-card"><Cursor2 class="ui-icon metric-icon" /><n-statistic label="本月点击" :value="formatNumber(monthSummary.clickTotal)" /></div></n-card>
+        <n-card size="small" style="--stagger-index: 2"><div class="stat-card"><CalendarHeatMap class="ui-icon metric-icon" /><n-statistic label="有记录天数" :value="`${monthSummary.activeDays} 天`" /></div></n-card>
       </div>
 
-      <n-card size="small" class="mb" :title="`${month} 活跃度`">
+      <n-card size="small" class="mb">
+        <template #header><span class="card-title"><CalendarHeatMap class="ui-icon card-title-icon" />{{ month }} 活跃度</span></template>
         <CalendarHeat
           :month="month"
           :days="days"
@@ -110,7 +116,8 @@ watch(month, loadMonth);
         />
       </n-card>
 
-      <n-card v-if="selected" size="small" :title="`${selected} 详情`">
+      <n-card v-if="selected" size="small">
+        <template #header><span class="card-title"><Calendar class="ui-icon card-title-icon" />{{ selected }} 详情</span></template>
         <div class="detail-stats">
           <n-statistic label="按键" :value="formatNumber(detail?.key_total ?? 0)" />
           <n-statistic label="点击" :value="formatNumber(detail?.click_total ?? 0)" />
@@ -127,7 +134,7 @@ watch(month, loadMonth);
         </div>
       </n-card>
       <n-card v-else size="small">
-        <span class="hint">点击日历中的某一天查看当日详情。</span>
+        <span class="hint empty-label"><Information class="ui-icon empty-icon" />点击日历中的某一天查看当日详情。</span>
       </n-card>
     </n-spin>
   </div>
@@ -142,13 +149,32 @@ watch(month, loadMonth);
 .head {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-end;
   gap: 12px;
   flex-wrap: wrap;
 }
+.head-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.eyebrow {
+  color: var(--rust);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+.head p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
 h2 {
   margin: 0;
-  font-size: 18px;
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", "Microsoft YaHei", serif;
+  font-size: 28px;
+  line-height: 1.1;
 }
 h4 {
   margin: 0 0 8px;
@@ -177,10 +203,17 @@ h4 {
   gap: 20px;
 }
 .hint {
-  color: #94a3b8;
+  color: var(--ink-soft);
   font-size: 12.5px;
 }
 .mb {
   margin-bottom: 12px;
+}
+
+@media (max-width: 680px) {
+  .stats-row,
+  .detail-cols {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

@@ -14,6 +14,7 @@ import {
   NSelect,
   NSwitch,
 } from "naive-ui";
+import { Activity, Add, ColorPalette, Filter, FolderOpen, Locked, Security, Settings as SettingsIcon } from "@vicons/carbon";
 import { computed, onMounted, ref, watch } from "vue";
 import { api, type AppConfig, type AppRow } from "../lib/ipc";
 import { getHeatmapRamp, HEATMAP_PALETTES, rgbToCss } from "../lib/colorscale";
@@ -37,8 +38,7 @@ const appOptions = computed(() =>
 );
 const palettePreview = computed(() => {
   const palette = form.value?.heatmap_palette ?? "classic";
-  const colors = getHeatmapRamp(palette).map(rgbToCss).join(", ");
-  return { background: `linear-gradient(90deg, ${colors})` };
+  return getHeatmapRamp(palette).map(rgbToCss);
 });
 
 async function load() {
@@ -92,11 +92,16 @@ onMounted(load);
 <template>
   <div class="page" v-if="form">
     <div class="head">
-      <h2>设置</h2>
+      <div class="head-copy">
+        <span class="eyebrow">SETTINGS / 06</span>
+        <h2 class="title-row"><SettingsIcon class="ui-icon title-icon" />设置</h2>
+        <p>调整采集边界、隐私策略和热力图的笔触颜色。</p>
+      </div>
       <span class="hint">{{ saving ? "保存中…" : "变更自动保存" }}</span>
     </div>
 
-    <n-card size="small" title="采集">
+    <n-card size="small">
+      <template #header><span class="card-title"><Activity class="ui-icon card-title-icon" />采集</span></template>
       <n-form label-placement="left" label-width="140">
         <n-form-item label="采集总开关">
           <n-switch v-model:value="form.capture_enabled" />
@@ -128,8 +133,10 @@ onMounted(load);
       </n-form>
     </n-card>
 
-    <n-card size="small" title="隐私" class="mt12">
+    <n-card size="small" class="mt12">
+      <template #header><span class="card-title"><Locked class="ui-icon card-title-icon" />隐私</span></template>
       <n-alert type="info" class="mb8">
+        <template #icon><Security class="ui-icon" /></template>
         窗口标题、输入内容、剪贴板、截图与鼠标轨迹<b>从设计上不采集</b>，因此这里没有对应开关。
       </n-alert>
       <n-form label-placement="left" label-width="140">
@@ -149,14 +156,18 @@ onMounted(load);
           <span class="desc">只支持向更粗粒度切换（聚合按 24px 基准存储）</span>
         </n-form-item>
         <n-form-item label="热力图配色">
+          <ColorPalette class="field-icon" />
           <n-select v-model:value="form.heatmap_palette" :options="paletteOptions" style="width: 220px" />
-          <span class="palette-preview" :style="palettePreview" aria-label="当前热力图配色预览" />
+          <span class="palette-preview" aria-label="当前热力图配色预览">
+            <i v-for="color in palettePreview" :key="color" class="palette-chip" :style="{ backgroundColor: color }" />
+          </span>
           <span class="desc">键盘、日历、鼠标热力图统一使用此配色</span>
         </n-form-item>
       </n-form>
     </n-card>
 
-    <n-card size="small" title="敏感应用黑名单" class="mt12">
+    <n-card size="small" class="mt12">
+      <template #header><span class="card-title"><Filter class="ui-icon card-title-icon" />敏感应用黑名单</span></template>
       <div class="desc-block">
         名单内的应用<b>完全不被记录</b>：事件在写入数据库前丢弃，应用名也不会进入统计字典。
         支持通配符（如 <code>*bank*</code>）。
@@ -193,13 +204,14 @@ onMounted(load);
           secondary
           @click="addToBlacklist('blacklist_keys', app.exe_name)"
         >
-          + {{ app.exe_name }}
+          <Add class="button-icon" />{{ app.exe_name }}
         </n-button>
         <span v-if="knownApps.length === 0" class="desc">（暂无记录，采集一段时间后会显示）</span>
       </div>
     </n-card>
 
-    <n-card size="small" title="存储与安全" class="mt12">
+    <n-card size="small" class="mt12">
+      <template #header><span class="card-title"><Security class="ui-icon card-title-icon" />存储与安全</span></template>
       <n-form label-placement="left" label-width="140">
         <n-form-item label="数据库加密">
           <n-switch v-model:value="form.db_encrypted" />
@@ -210,7 +222,7 @@ onMounted(load);
           </span>
         </n-form-item>
       </n-form>
-      <n-button size="small" @click="openDir">打开数据目录</n-button>
+      <n-button size="small" @click="openDir"><template #icon><FolderOpen class="button-icon" /></template>打开数据目录</n-button>
     </n-card>
   </div>
 </template>
@@ -224,15 +236,36 @@ onMounted(load);
 .head {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.head-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.eyebrow {
+  color: var(--rust);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+.head p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
 }
 h2 {
   margin: 0;
-  font-size: 18px;
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", "Microsoft YaHei", serif;
+  font-size: 28px;
+  line-height: 1.1;
 }
 .hint {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--ink-soft);
 }
 .mt12 {
   margin-top: 12px;
@@ -243,17 +276,22 @@ h2 {
 .desc {
   margin-left: 10px;
   font-size: 12px;
-  color: #64748b;
+  color: var(--ink-soft);
   line-height: 1.6;
 }
 .palette-preview {
-  display: inline-block;
+  display: inline-flex;
   width: 120px;
-  height: 12px;
+  height: 14px;
   margin-left: 10px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  border-radius: 6px;
+  overflow: hidden;
+  border: 1px dashed var(--ink);
+  border-radius: 2px;
   vertical-align: middle;
+}
+.palette-chip {
+  flex: 1;
+  display: block;
 }
 .desc-block {
   font-size: 12.5px;
@@ -262,9 +300,10 @@ h2 {
   margin-bottom: 10px;
 }
 code {
-  background: #f1f5f9;
+  background: var(--paper-deep);
   padding: 1px 5px;
-  border-radius: 4px;
+  border: 1px dashed var(--line);
+  border-radius: 2px;
   font-size: 11.5px;
 }
 .quick-add {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 /** Top-N 列表（Top 键 / Top 区域 / 按键分布共用）：名称 + 占比条 + 次数 + 百分比。 */
+import { Information } from "@vicons/carbon";
 const props = defineProps<{
   items: { label: string; count: number; ratio: number; sublabel?: string }[];
   max?: number;
@@ -10,8 +11,13 @@ const limit = () => props.max ?? 10;
 </script>
 
 <template>
-  <div class="top-list">
-    <div v-for="(it, i) in items.slice(0, limit())" :key="it.label" class="row">
+  <div class="top-list stagger-children">
+    <div
+      v-for="(it, i) in items.slice(0, limit())"
+      :key="it.label"
+      class="row hover-lift"
+      :style="{ '--stagger-index': i }"
+    >
       <span class="rank">{{ i + 1 }}</span>
       <span class="label" :title="it.label">
         {{ it.label }}
@@ -23,7 +29,7 @@ const limit = () => props.max ?? 10;
       <span class="count">{{ it.count.toLocaleString() }}<span class="unit">{{ props.unit ?? "" }}</span></span>
       <span class="ratio">{{ (it.ratio * 100).toFixed(1) }}%</span>
     </div>
-    <div v-if="items.length === 0" class="empty">暂无数据</div>
+    <div v-if="items.length === 0" class="empty empty-label"><Information class="ui-icon empty-icon" />暂无数据</div>
   </div>
 </template>
 
@@ -39,10 +45,14 @@ const limit = () => props.max ?? 10;
   align-items: center;
   gap: 8px;
   font-size: 12.5px;
+  padding: 5px 4px;
+  border-bottom: 1px dashed rgba(44, 44, 44, 0.18);
+  transform-origin: left center;
 }
 .rank {
-  color: #94a3b8;
+  color: var(--rust);
   text-align: right;
+  font-family: Georgia, "Times New Roman", serif;
 }
 .label {
   overflow: hidden;
@@ -50,37 +60,39 @@ const limit = () => props.max ?? 10;
   white-space: nowrap;
 }
 .sublabel {
-  color: #94a3b8;
+  color: var(--ink-soft);
   font-size: 11px;
   margin-left: 4px;
 }
 .bar {
-  background: #e2e8f0;
-  border-radius: 4px;
+  background: var(--paper-deep);
+  border: 1px dashed rgba(44, 44, 44, 0.18);
+  border-radius: 2px;
   height: 8px;
   overflow: hidden;
 }
 .fill {
   height: 100%;
-  background: linear-gradient(90deg, #60a5fa, #2563eb);
-  border-radius: 4px;
+  background: var(--blue-ink);
+  border-radius: 1px;
+  transition: width 400ms var(--ease-sketch);
 }
 .count {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 .unit {
-  color: #94a3b8;
+  color: var(--ink-soft);
   font-size: 11px;
   margin-left: 2px;
 }
 .ratio {
   text-align: right;
-  color: #64748b;
+  color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
 }
 .empty {
-  color: #94a3b8;
+  color: var(--ink-soft);
   font-size: 12.5px;
   padding: 6px 0;
 }

@@ -1,0 +1,197 @@
+name: 构建 TypeTrek Windows 安装包
+
+on:
+  # 主分支和 PR 用于尽早发现前端、Rust 或安装包构建问题。
+  push:
+    branches:
+      - master
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+  # 允许在 GitHub Actions 页面手动重跑构建，不需要额外提交空 commit。
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # 同一分支只保留最新的 PR 检查，避免浪费 Windows runner；标签发布不会被取消。
+  group: typetrek-build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  frontend-check:
+    name: 前端检查
+    runs-on: ubuntu-24.04
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # pnpm/setup v3 使用 pnpm 11 的独立发行版，同时固定 Node 22，保证 CI 与本地版本一致。
+      - name: 设置 pnpm 和 Node.js
+        uses: pnpm/setup@v3
+        with:
+          version: 11.19.0
+          runtime: node@22
+          cache: true
+          install: false
+
+      - name: 安装前端依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 运行前端单元测试
+        run: pnpm test -- --reporter=dot
+
+      - name: 检查并构建前端
+        run: pnpm run build
+
+  windows-package:
+    name: Windows x64 安装包
+    needs: frontend-check
+    runs-on: windows-2022
+    # 构建代码可能来自 PR，因此这里只读；写 Release 的权限只授予最后的发布 job。
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: 设置 pnpm 和 Node.js
+        uses: pnpm/setup@v3
+        with:
+          version: 11.19.0
+          runtime: node@22
+          cache: true
+          install: false
+
+      - name: 设置 Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      # 缓存 Cargo registry、git 源码和 src-tauri/target，减少后续构建的冷启动时间。
+      - name: 缓存 Rust 构建
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      # SQLCipher 使用 vendored OpenSSL；Windows 上需要 Strawberry Perl 和 NASM。
+      - name: 安装 Windows OpenSSL 构建依赖
+        shell: pwsh
+        run: |
+          choco install strawberryperl nasm --yes --no-progress
+
+          $perlBin = 'C:\Strawberry\perl\bin'
+          $nasmBin = 'C:\Program Files\NASM'
+          if (-not (Test-Path (Join-Path $perlBin 'perl.exe'))) {
+            throw "未找到 Strawberry Perl：$perlBin"
+          }
+          if (-not (Test-Path (Join-Path $nasmBin 'nasm.exe'))) {
+            throw "未找到 NASM：$nasmBin"
+          }
+
+          $perlBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $nasmBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "PERL=$perlBin\perl.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: 校验发布版本
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $packageVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tauriVersion = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          if ($packageVersion -ne $tauriVersion) {
+            throw "package.json ($packageVersion) 与 src-tauri/tauri.conf.json ($tauriVersion) 版本不一致"
+          }
+          $expectedTag = "v$tauriVersion"
+          if ($env:GITHUB_REF_NAME -ne $expectedTag) {
+            throw "发布标签必须是 $expectedTag，实际为 $env:GITHUB_REF_NAME"
+          }
+
+      - name: 安装前端依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 检查 Rust 格式
+        working-directory: src-tauri
+        run: cargo fmt --all -- --check
+
+      - name: 运行 Rust clippy
+        working-directory: src-tauri
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: 运行 Rust 单元测试
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+
+      # 这里只构建，不在不可信的 PR 代码环境中授予 Release 写权限。
+      # 使用已发布的具体版本，避免 @v1 这类不存在或漂移的 action 标签。
+      - name: 构建 Tauri 应用
+        uses: tauri-apps/tauri-action@v0.6.2
+
+      - name: 整理绿色版和校验文件
+        shell: pwsh
+        run: |
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $outputDir = Join-Path $env:GITHUB_WORKSPACE 'release'
+          $exe = Join-Path $env:GITHUB_WORKSPACE 'src-tauri\target\release\typetrek.exe'
+          $nsisDir = Join-Path $env:GITHUB_WORKSPACE 'src-tauri\target\release\bundle\nsis'
+
+          if (-not (Test-Path $exe)) {
+            throw "未找到绿色版可执行文件：$exe"
+          }
+          if (-not (Test-Path $nsisDir)) {
+            throw "未找到 NSIS 输出目录：$nsisDir"
+          }
+
+          New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+          $portableExe = Join-Path $outputDir "TypeTrek-$version-portable.exe"
+          $portableZip = Join-Path $outputDir "TypeTrek-$version-portable.zip"
+          Copy-Item $exe $portableExe -Force
+          Compress-Archive -Path $portableExe -DestinationPath $portableZip -Force
+          Get-ChildItem $nsisDir -Filter '*.exe' -File | Copy-Item -Destination $outputDir -Force
+
+          $hashFile = Join-Path $outputDir 'SHA256SUMS.txt'
+          $hashLines = Get-ChildItem $outputDir -File | Where-Object Name -ne 'SHA256SUMS.txt' | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash *$($_.Name)"
+          }
+          $hashLines | Set-Content -Path $hashFile -Encoding utf8
+
+      - name: 上传 Actions 构建产物
+        uses: actions/upload-artifact@v7
+        with:
+          name: TypeTrek-Windows-${{ github.sha }}
+          path: release/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-release:
+    name: 发布 GitHub Release
+    needs: windows-package
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    # 只有确认构建成功且触发来源是 v* 标签时才允许创建或更新 Release。
+    permissions:
+      contents: write
+    steps:
+      - name: 下载 Windows 构建产物
+        uses: actions/download-artifact@v8
+        with:
+          name: TypeTrek-Windows-${{ github.sha }}
+          path: release
+
+      - name: 创建或更新 GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" release/* --clobber
+          else
+            gh release create "$tag" release/* --verify-tag --title "TypeTrek $tag" --generate-notes --notes 'TypeTrek Windows x64 安装包。请优先下载 NSIS 安装包；绿色版 ZIP 适合免安装使用。'
+          fi

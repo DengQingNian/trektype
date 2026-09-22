@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /** 键盘热力图页：范围选择 + 104/87 布局热力图 + Top 键 + 占比。 */
 import { NCard, NSpin, NStatistic } from "naive-ui";
+import { Grid, Keyboard, Renew } from "@vicons/carbon";
 import { computed, onMounted, ref, watch } from "vue";
 import KeyboardHeatmap from "../components/KeyboardHeatmap.vue";
 import RangePicker from "../components/RangePicker.vue";
@@ -57,16 +58,20 @@ watch(() => range.range, load, { deep: true });
 <template>
   <div class="page">
     <div class="head">
-      <h2>键盘热力图</h2>
+      <div class="head-copy">
+        <span class="eyebrow">KEYBOARD / 02</span>
+        <h2 class="title-row"><Keyboard class="ui-icon title-icon" />键盘热力图</h2>
+        <p>看看哪些键位，最常参与今天的思考。</p>
+      </div>
       <RangePicker />
     </div>
 
     <n-spin :show="loading">
-      <div class="stats-row">
-        <n-card size="small"><n-statistic label="按键总数" :value="formatNumber(stats?.total ?? 0)" /></n-card>
-        <n-card size="small"><n-statistic label="不同键位" :value="formatNumber(stats?.keys.length ?? 0)" /></n-card>
-        <n-card size="small">
-          <n-statistic label="自动重复（未计入）" :value="formatNumber(repeatTotal)" />
+      <div class="stats-row stagger-children">
+        <n-card size="small" style="--stagger-index: 0"><div class="stat-card"><Keyboard class="ui-icon metric-icon" /><n-statistic label="按键总数" :value="formatNumber(stats?.total ?? 0)" /></div></n-card>
+        <n-card size="small" style="--stagger-index: 1"><div class="stat-card"><Grid class="ui-icon metric-icon" /><n-statistic label="不同键位" :value="formatNumber(stats?.keys.length ?? 0)" /></div></n-card>
+        <n-card size="small" style="--stagger-index: 2">
+          <div class="stat-card"><Renew class="ui-icon metric-icon" /><n-statistic label="自动重复（未计入）" :value="formatNumber(repeatTotal)" /></div>
         </n-card>
       </div>
 
@@ -74,7 +79,8 @@ watch(() => range.range, load, { deep: true });
         <KeyboardHeatmap :counts="counts" :total="stats?.total ?? 0" :palette="palette" />
       </n-card>
 
-      <n-card size="small" title="Top 键位">
+      <n-card size="small">
+        <template #header><span class="card-title"><Grid class="ui-icon card-title-icon" />Top 键位</span></template>
         <TopList :items="topKeys" :max="10" unit=" 次" />
       </n-card>
     </n-spin>
@@ -89,12 +95,33 @@ watch(() => range.range, load, { deep: true });
 }
 .head {
   display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.head-copy {
+  display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 3px;
+}
+.eyebrow {
+  color: var(--rust);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+.head p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
 }
 h2 {
   margin: 0;
-  font-size: 18px;
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", "Microsoft YaHei", serif;
+  font-size: 28px;
+  line-height: 1.1;
 }
 .stats-row {
   display: grid;
@@ -104,5 +131,11 @@ h2 {
 }
 .mb {
   margin-bottom: 12px;
+}
+
+@media (max-width: 680px) {
+  .stats-row {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

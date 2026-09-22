@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /** 鼠标热力图页：屏幕点击热力图（多显示器）+ 五类按钮分布 + Top 区域。 */
 import { NCard, NSpin, NStatistic } from "naive-ui";
+import { ChartPie, Cursor2, Grid, Screen } from "@vicons/carbon";
 import { computed, onMounted, ref, watch } from "vue";
 import type { EChartsOption } from "echarts";
 import EChart from "../components/EChart.vue";
@@ -91,19 +92,20 @@ watch(cellSize, load);
 <template>
   <div class="page">
     <div class="head">
-      <h2>鼠标热力图</h2>
+      <div class="head-copy">
+        <span class="eyebrow">MOUSE / 03</span>
+        <h2 class="title-row"><Cursor2 class="ui-icon title-icon" />鼠标热力图</h2>
+        <p>从屏幕分布到按钮偏好，看看指针留下的轨迹。</p>
+      </div>
       <RangePicker />
     </div>
 
     <n-spin :show="loading">
-      <div class="stats-row">
-        <n-card size="small"><n-statistic label="点击总数" :value="formatNumber(stats?.total ?? 0)" /></n-card>
-        <n-card size="small"><n-statistic label="显示器" :value="`${stats?.monitors.length ?? 0} 台`" /></n-card>
+      <div class="stats-row stagger-children">
+        <n-card size="small"><div class="stat-card"><Cursor2 class="ui-icon metric-icon" /><n-statistic label="点击总数" :value="formatNumber(stats?.total ?? 0)" /></div></n-card>
+        <n-card size="small"><div class="stat-card"><Screen class="ui-icon metric-icon" /><n-statistic label="显示器" :value="`${stats?.monitors.length ?? 0} 台`" /></div></n-card>
         <n-card size="small">
-          <n-statistic
-            label="左键占比"
-            :value="`${stats && stats.total > 0 ? (((stats.by_button.find((b) => b.button === 'left')?.count ?? 0) / stats.total) * 100).toFixed(1) : '0.0'}%`"
-          />
+          <div class="stat-card"><ChartPie class="ui-icon metric-icon" /><n-statistic label="左键占比" :value="`${stats && stats.total > 0 ? (((stats.by_button.find((b) => b.button === 'left')?.count ?? 0) / stats.total) * 100).toFixed(1) : '0.0'}%`" /></div>
         </n-card>
       </div>
 
@@ -118,10 +120,12 @@ watch(cellSize, load);
       </n-card>
 
       <div class="two-col">
-        <n-card size="small" title="按钮分布">
+        <n-card size="small">
+          <template #header><span class="card-title"><ChartPie class="ui-icon card-title-icon" />按钮分布</span></template>
           <EChart :option="buttonOption" height="240px" />
         </n-card>
-        <n-card size="small" title="Top 区域（3×3 分区）">
+        <n-card size="small">
+          <template #header><span class="card-title"><Grid class="ui-icon card-title-icon" />Top 区域（3×3 分区）</span></template>
           <TopList :items="topRegions" :max="5" unit=" 次" />
         </n-card>
       </div>
@@ -137,12 +141,33 @@ watch(cellSize, load);
 }
 .head {
   display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.head-copy {
+  display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 3px;
+}
+.eyebrow {
+  color: var(--rust);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+.head p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
 }
 h2 {
   margin: 0;
-  font-size: 18px;
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", "Microsoft YaHei", serif;
+  font-size: 28px;
+  line-height: 1.1;
 }
 .stats-row {
   display: grid;
@@ -157,5 +182,12 @@ h2 {
 }
 .mb {
   margin-bottom: 12px;
+}
+
+@media (max-width: 680px) {
+  .stats-row,
+  .two-col {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

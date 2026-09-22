@@ -42,6 +42,7 @@ const colorMap = computed(() =>
     getHeatmapRamp(props.palette),
   ),
 );
+const paletteColors = computed(() => getHeatmapRamp(props.palette).map(rgbToCss));
 const scaleBounds = computed(() => computeBounds(Object.values(props.counts)));
 
 function countOf(code: string): number {
@@ -82,7 +83,9 @@ defineExpose({ maxCount, hottest });
       </n-radio-group>
       <div class="legend">
         <span class="legend-label">低</span>
-        <span class="legend-bar" :style="{ background: `linear-gradient(90deg, ${getHeatmapRamp(props.palette).map(rgbToCss).join(', ')})` }" />
+        <span class="legend-bar">
+          <i v-for="color in paletteColors" :key="color" :style="{ backgroundColor: color }" />
+        </span>
         <span class="legend-label">高</span>
       </div>
     </div>
@@ -94,7 +97,7 @@ defineExpose({ maxCount, hottest });
           :y="key.y * U"
           :width="key.w * U - GAP"
           :height="U - GAP"
-          rx="5"
+          rx="2"
           :fill="colorMap.get(key.code) ?? '#f1f5f9'"
           stroke="#cbd5e1"
           stroke-width="0.6"
@@ -141,31 +144,38 @@ defineExpose({ maxCount, hottest });
 .kb {
   width: 100%;
   height: auto;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  background: var(--paper-light);
+  border: 2px dashed var(--ink);
+  border-radius: 2px;
+  box-shadow: 1px 1px 0 rgba(44, 44, 44, 0.2);
 }
 .legend {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: #64748b;
+  color: var(--ink-soft);
 }
 .legend-bar {
   width: 120px;
   height: 10px;
-  border-radius: 5px;
-  background: linear-gradient(90deg, #e8f0fe, #93c5fd, #3b82f6, #1d4ed8, #172554);
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px dashed var(--ink);
+  border-radius: 2px;
+}
+.legend-bar i {
+  flex: 1;
+  display: block;
 }
 .kb-footer {
   display: flex;
   gap: 18px;
   font-size: 12.5px;
-  color: #475569;
+  color: var(--ink-soft);
   flex-wrap: wrap;
 }
 .tip {
-  color: #94a3b8;
+  color: var(--ink-soft);
 }
 </style>

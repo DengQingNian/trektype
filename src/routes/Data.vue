@@ -14,6 +14,7 @@ import {
   NRadioGroup,
   NSpin,
 } from "naive-ui";
+import { Clean, DataBase, DocumentDownload, FolderOpen, Grid, Screen, Table, TrashCan } from "@vicons/carbon";
 import { computed, onMounted, ref } from "vue";
 import { api, formatBytes, formatNumber, type DbStats } from "../lib/ipc";
 import { dialog, message, toastError } from "../lib/ui";
@@ -138,23 +139,28 @@ onMounted(load);
 <template>
   <div class="page">
     <div class="head">
-      <h2>数据管理</h2>
-      <n-button size="small" @click="openDir">打开数据目录</n-button>
+      <div class="head-copy">
+        <span class="eyebrow">DATA / 05</span>
+        <h2 class="title-row"><DataBase class="ui-icon title-icon" />数据管理</h2>
+        <p>导出、整理和清理你的本地记录，所有动作都由你掌控。</p>
+      </div>
+      <n-button size="small" @click="openDir"><template #icon><FolderOpen class="button-icon" /></template>打开数据目录</n-button>
     </div>
 
     <n-spin :show="loading">
       <n-grid :cols="4" :x-gap="12" class="mb">
-        <n-gi><n-card size="small"><div class="stat"><span class="k">数据库大小</span><span class="v">{{ formatBytes(stats?.db_bytes ?? 0) }}</span></div></n-card></n-gi>
-        <n-gi><n-card size="small"><div class="stat"><span class="k">按键明细</span><span class="v">{{ formatNumber(stats?.key_rows ?? 0) }} 行</span></div></n-card></n-gi>
-        <n-gi><n-card size="small"><div class="stat"><span class="k">点击明细</span><span class="v">{{ formatNumber(stats?.mouse_rows ?? 0) }} 行</span></div></n-card></n-gi>
-        <n-gi><n-card size="small"><div class="stat"><span class="k">聚合行数</span><span class="v">{{ formatNumber(stats?.agg_rows ?? 0) }} 行</span></div></n-card></n-gi>
-        <n-gi><n-card size="small"><div class="stat"><span class="k">应用数</span><span class="v">{{ formatNumber(stats?.app_count ?? 0) }}</span></div></n-card></n-gi>
-        <n-gi><n-card size="small"><div class="stat"><span class="k">显示器数</span><span class="v">{{ formatNumber(stats?.monitor_count ?? 0) }}</span></div></n-card></n-gi>
-        <n-gi><n-card size="small"><div class="stat"><span class="k">采集会话</span><span class="v">{{ formatNumber(stats?.session_count ?? 0) }}</span></div></n-card></n-gi>
-        <n-gi><n-card size="small"><div class="stat"><span class="k">最早明细</span><span class="v">{{ stats?.oldest_raw_date ?? "—" }}</span></div></n-card></n-gi>
+        <n-gi><n-card size="small"><div class="stat-card"><DataBase class="ui-icon metric-icon" /><div class="stat"><span class="k">数据库大小</span><span class="v">{{ formatBytes(stats?.db_bytes ?? 0) }}</span></div></div></n-card></n-gi>
+        <n-gi><n-card size="small"><div class="stat-card"><Table class="ui-icon metric-icon" /><div class="stat"><span class="k">按键明细</span><span class="v">{{ formatNumber(stats?.key_rows ?? 0) }} 行</span></div></div></n-card></n-gi>
+        <n-gi><n-card size="small"><div class="stat-card"><Table class="ui-icon metric-icon" /><div class="stat"><span class="k">点击明细</span><span class="v">{{ formatNumber(stats?.mouse_rows ?? 0) }} 行</span></div></div></n-card></n-gi>
+        <n-gi><n-card size="small"><div class="stat-card"><Grid class="ui-icon metric-icon" /><div class="stat"><span class="k">聚合行数</span><span class="v">{{ formatNumber(stats?.agg_rows ?? 0) }} 行</span></div></div></n-card></n-gi>
+        <n-gi><n-card size="small"><div class="stat-card"><DocumentDownload class="ui-icon metric-icon" /><div class="stat"><span class="k">应用数</span><span class="v">{{ formatNumber(stats?.app_count ?? 0) }}</span></div></div></n-card></n-gi>
+        <n-gi><n-card size="small"><div class="stat-card"><Screen class="ui-icon metric-icon" /><div class="stat"><span class="k">显示器数</span><span class="v">{{ formatNumber(stats?.monitor_count ?? 0) }}</span></div></div></n-card></n-gi>
+        <n-gi><n-card size="small"><div class="stat-card"><Clean class="ui-icon metric-icon" /><div class="stat"><span class="k">采集会话</span><span class="v">{{ formatNumber(stats?.session_count ?? 0) }}</span></div></div></n-card></n-gi>
+        <n-gi><n-card size="small"><div class="stat-card"><Table class="ui-icon metric-icon" /><div class="stat"><span class="k">最早明细</span><span class="v">{{ stats?.oldest_raw_date ?? "—" }}</span></div></div></n-card></n-gi>
       </n-grid>
 
-      <n-card size="small" title="导出数据" class="mb">
+      <n-card size="small" class="mb">
+        <template #header><span class="card-title"><DocumentDownload class="ui-icon card-title-icon" />导出数据</span></template>
         <div class="row">
           <span class="label">格式</span>
           <n-radio-group v-model:value="exportFormat" size="small">
@@ -167,19 +173,20 @@ onMounted(load);
             <n-radio-button value="raw">明细（含时序）</n-radio-button>
           </n-radio-group>
           <n-date-picker v-model:value="exportRange" type="daterange" size="small" :clearable="false" style="width: 240px" />
-          <n-button size="small" type="primary" :loading="busy" @click="doExport">导出</n-button>
+          <n-button size="small" type="primary" :loading="busy" @click="doExport"><template #icon><DocumentDownload class="button-icon" /></template>导出</n-button>
         </div>
         <n-alert v-if="exportScope === 'raw'" type="warning" class="mt8">
           明细导出包含按键时间顺序（不含输入内容），导出文件为未加密文件，请妥善保管。
         </n-alert>
       </n-card>
 
-      <n-card size="small" title="删除数据">
+      <n-card size="small">
+        <template #header><span class="card-title"><TrashCan class="ui-icon card-title-icon" />删除数据</span></template>
         <div class="row">
           <span class="label">日期区间</span>
           <n-date-picker v-model:value="deleteRange" type="daterange" size="small" style="width: 240px" />
-          <n-button size="small" type="error" :loading="busy" @click="doDelete">删除区间数据</n-button>
-          <n-button size="small" :loading="busy" @click="doCleanup">立即清理过期明细</n-button>
+          <n-button size="small" type="error" :loading="busy" @click="doDelete"><template #icon><TrashCan class="button-icon" /></template>删除区间数据</n-button>
+          <n-button size="small" :loading="busy" @click="doCleanup"><template #icon><Clean class="button-icon" /></template>立即清理过期明细</n-button>
         </div>
         <div class="note">
           删除会同时移除该区间的明细与统计聚合，且不可恢复。保留期清理只删除超过保留期的
@@ -199,11 +206,32 @@ onMounted(load);
 .head {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.head-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.eyebrow {
+  color: var(--rust);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+.head p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
 }
 h2 {
   margin: 0;
-  font-size: 18px;
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", "Microsoft YaHei", serif;
+  font-size: 28px;
+  line-height: 1.1;
 }
 .stat {
   display: flex;
@@ -212,7 +240,7 @@ h2 {
 }
 .k {
   font-size: 11.5px;
-  color: #64748b;
+  color: var(--ink-soft);
 }
 .v {
   font-size: 15px;
@@ -238,7 +266,19 @@ h2 {
 .note {
   margin-top: 10px;
   font-size: 12px;
-  color: #64748b;
+  color: var(--ink-soft);
   line-height: 1.7;
+}
+
+@media (max-width: 900px) {
+  .page :deep(.n-grid) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .page :deep(.n-grid) {
+    grid-template-columns: 1fr !important;
+  }
 }
 </style>

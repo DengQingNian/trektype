@@ -1,0 +1,357 @@
+/* TypeTrek 的全局视觉系统：纸张、铅笔线和低饱和信息色。 */
+:root {
+  color: #2c2c2c;
+  background: #f5f0e8;
+  font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --ink: #2c2c2c;
+  --ink-soft: #6f6a62;
+  --paper: #f5f0e8;
+  --paper-deep: #e8e2d8;
+  --paper-light: #faf5ed;
+  --rust: #b35f4d;
+  --sage: #727954;
+  --blue-ink: #58758a;
+  --line: rgba(44, 44, 44, 0.36);
+  --shadow-pencil: 2px 2px 0 rgba(44, 44, 44, 0.24);
+  --ease-sketch: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  background-color: var(--paper);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'%3E%3Cpath d='M8 16h1M42 74h1M79 33h1M24 51h1M66 90h1' stroke='%232c2c2c' stroke-opacity='.055' stroke-width='1'/%3E%3C/svg%3E");
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  color: var(--paper);
+  background: var(--ink);
+}
+
+/* Carbon 线性图标：统一成铅笔线，不使用饱和色块堆叠。 */
+.ui-icon {
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
+  vertical-align: -0.14em;
+  stroke-width: 1.7;
+}
+
+.nav-icon {
+  width: 16px;
+  height: 16px;
+  opacity: 0.82;
+}
+
+.title-row,
+.card-title,
+.button-label,
+.status-label,
+.empty-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.title-icon {
+  width: 28px;
+  height: 28px;
+  padding: 5px;
+  color: var(--rust);
+  border: 1px dashed var(--rust);
+  background-color: var(--paper-deep);
+  transform: rotate(-2deg);
+}
+
+.card-title-icon {
+  width: 15px;
+  height: 15px;
+  color: var(--rust);
+}
+
+.metric-icon {
+  width: 20px;
+  height: 20px;
+  padding: 3px;
+  color: var(--blue-ink);
+  border: 1px dashed var(--blue-ink);
+  background-color: var(--paper-deep);
+}
+
+.stat-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.button-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.empty-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--ink-soft);
+}
+
+.field-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--ink-soft);
+}
+
+.section-icon {
+  width: 14px;
+  height: 14px;
+  margin-right: 4px;
+  color: var(--rust);
+}
+
+/* Naive UI 作为行为层使用，外观统一收进 Sketch Style。 */
+.n-card,
+.n-card.n-card--bordered {
+  --n-border-radius: 3px !important;
+  background-color: var(--paper) !important;
+  border: 2px dashed var(--ink) !important;
+  border-radius: 3px !important;
+  box-shadow: var(--shadow-pencil) !important;
+  transition: transform 200ms cubic-bezier(0.33, 1, 0.68, 1), box-shadow 200ms cubic-bezier(0.33, 1, 0.68, 1), background-color 200ms ease;
+}
+
+.n-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 3px 3px 0 rgba(44, 44, 44, 0.34) !important;
+}
+
+.n-card .n-card-header {
+  color: var(--ink) !important;
+  font-family: Georgia, "Times New Roman", "Microsoft YaHei", serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.n-button,
+.n-button.n-button--default-type,
+.n-button.n-button--primary-type,
+.n-button.n-button--tertiary-type,
+.n-button.n-button--error-type,
+.n-button.n-button--warning-type,
+.n-button.n-button--success-type {
+  --n-border-radius: 3px !important;
+  border: 2px dashed var(--ink) !important;
+  border-radius: 3px !important;
+  box-shadow: 1px 1px 0 rgba(44, 44, 44, 0.22) !important;
+  transition: transform 160ms var(--ease-sketch), box-shadow 160ms var(--ease-sketch), background-color 160ms ease, color 160ms ease !important;
+}
+
+.n-button:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 rgba(44, 44, 44, 0.34) !important;
+}
+
+.n-button:active {
+  transform: translate(1px, 1px) rotate(-0.5deg);
+  box-shadow: none !important;
+}
+
+.n-button .button-icon {
+  transition: transform 160ms var(--ease-sketch);
+}
+
+.n-button:hover .button-icon {
+  transform: rotate(-7deg) translateY(-1px);
+}
+
+.n-button.n-button--primary-type {
+  background-color: var(--ink) !important;
+  color: var(--paper) !important;
+}
+
+.n-button.n-button--error-type {
+  color: #8d3f36 !important;
+}
+
+.n-input,
+.n-base-selection,
+.n-date-picker,
+.n-date-picker .n-input,
+.n-radio-group .n-radio-button {
+  --n-border-radius: 3px !important;
+  border-radius: 3px !important;
+}
+
+.n-input,
+.n-base-selection,
+.n-date-picker .n-input {
+  background-color: var(--paper-light) !important;
+  border: 2px dashed var(--ink) !important;
+}
+
+.n-input:focus-within,
+.n-base-selection:focus-within {
+  box-shadow: 2px 2px 0 rgba(44, 44, 44, 0.24) !important;
+}
+
+.n-radio-group .n-radio-button {
+  border: 2px dashed var(--ink) !important;
+  background-color: transparent !important;
+  color: var(--ink) !important;
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease !important;
+}
+
+.n-radio-group .n-radio-button:hover {
+  background-color: var(--paper-deep) !important;
+}
+
+.n-radio-group .n-radio-button.n-radio-button--checked {
+  background-color: var(--ink) !important;
+  color: var(--paper) !important;
+}
+
+.n-tag {
+  --n-border-radius: 3px !important;
+  border-radius: 3px !important;
+  border: 1px dashed currentColor;
+}
+
+.n-alert {
+  --n-border-radius: 3px !important;
+  border: 2px dashed currentColor !important;
+  border-radius: 3px !important;
+  background-color: var(--paper-light) !important;
+}
+
+.n-statistic .n-statistic-label {
+  color: var(--ink-soft) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.08em;
+}
+
+.n-statistic .n-statistic-value {
+  color: var(--ink) !important;
+  font-family: Georgia, "Times New Roman", "Microsoft YaHei", serif;
+}
+
+/* Fade In Up：页面区块挂载时轻量出现。 */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-up,
+.page {
+  --sk-duration: 600ms;
+  --sk-delay: 0ms;
+  animation: fade-in-up var(--sk-duration) var(--ease-sketch) var(--sk-delay) both;
+}
+
+/* Stagger Children：统计卡片与列表依次入场。 */
+@keyframes stagger-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stagger-children > * {
+  opacity: 0;
+  animation: stagger-fade-in 500ms var(--ease-sketch) both;
+  animation-delay: calc(var(--stagger-index, 0) * var(--stagger-delay, 75ms));
+}
+
+/* Slide Swap：路由内容与范围切换沿水平方向交替。 */
+@keyframes slide-in-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-out-to-left {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+}
+
+.page-slide-enter-active {
+  animation: slide-in-from-right 400ms var(--ease-sketch) both;
+}
+
+.page-slide-leave-active {
+  animation: slide-out-to-left 400ms var(--ease-sketch) both;
+}
+
+.hover-lift {
+  transition: transform 200ms cubic-bezier(0.33, 1, 0.68, 1), box-shadow 200ms cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 3px 3px 0 rgba(44, 44, 44, 0.36);
+}
+
+@media (max-width: 900px) {
+  .n-card:hover {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .fade-in-up,
+  .page,
+  .stagger-children > *,
+  .page-slide-enter-active,
+  .page-slide-leave-active {
+    opacity: 1;
+    transform: none;
+  }
+}

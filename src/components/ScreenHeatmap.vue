@@ -5,11 +5,12 @@
  * 渲染流程（计划 §8.3）：
  * 1. 按 monitors 快照重建虚拟桌面画布（含负坐标与 DPI 折算）；
  * 2. 按网格点击次数计算 log1p + P05/P99 色阶；
- * 3. 直接给网格块着色（蓝→绿→黄→红），避免透明白光晕在不同 DPR 下退化成白板；
- * 4. 叠加显示器边框与名称；悬停显示格内点击数。
+ * 3. 每个网格中心绘制可叠加的径向热核，再按 alpha 着色，形成连续热成像；
+ * 4. 叠加显示器边框与名称；悬停仍显示对应聚合网格的点击数。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { NRadioGroup, NRadioButton } from "naive-ui";
+import { Screen, ScreenOff } from "@vicons/carbon";
 import {
   computeBounds,
   getHeatmapRamp,
@@ -18,6 +19,11 @@ import {
   rgbToCss,
   type HeatmapPalette,
 } from "../lib/colorscale";
+import {
+  heatmapColorPosition,
+  heatmapKernelRadius,
+  heatmapPeakAlpha,
+} from "../lib/screen-heatmap";
 import type { GridCell, MonitorRow } from "../lib/ipc";
 
 const props = defineProps<{
@@ -90,25 +96,78 @@ function render() {
     ctx.fillRect(p.cx, p.cy, m.width * scale, m.height * scale);
   }
 
-  // 按当前范围内的点击分布计算色阶；有数据的网格至少显示为可见蓝色。
-  const boundsForColor = computeBounds(props.cells.map((cell) => cell.count));
-  const heatRamp = getHeatmapRamp(props.palette);
+  // 先画热度场：每个网格中心是一个平滑径向热核，多个热核会自然叠加。
+  // 这样仍使用网格聚合数据，但最终画面没有网格方块的硬边界。
+  const cellsByMonitor = new Map<number, GridCell[]>();
   for (const cell of props.cells) {
-    const mon = list.find((m) => m.id === cell.monitor_id);
-    if (!mon) continue; // 单屏模式下过滤其他屏的数据
-    if (cell.count <= 0) continue;
-    const p = toCanvas(mon.x + cell.cell_x * props.cellSize, mon.y + cell.cell_y * props.cellSize);
-    const t = Math.max(0.12, normalize(cell.count, boundsForColor));
-    ctx.fillStyle = rgbToCss(rampColor(t, heatRamp));
-    ctx.globalAlpha = 0.88;
-    ctx.fillRect(
-      p.cx + 0.5,
-      p.cy + 0.5,
-      Math.max(1, props.cellSize * scale - 1),
-      Math.max(1, props.cellSize * scale - 1),
-    );
+    const cells = cellsByMonitor.get(cell.monitor_id) ?? [];
+    cells.push(cell);
+    cellsByMonitor.set(cell.monitor_id, cells);
   }
-  ctx.globalAlpha = 1;
+  const visibleCells = props.cells.filter((cell) => list.some((m) => m.id === cell.monitor_id));
+  const boundsForColor = computeBounds(visibleCells.map((cell) => cell.count));
+  const heatRamp = getHeatmapRamp(props.palette);
+  const heatLayer = document.createElement("canvas");
+  heatLayer.width = cv.width;
+  heatLayer.height = cv.height;
+  const heatCtx = heatLayer.getContext("2d");
+  if (!heatCtx) return;
+  heatCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  heatCtx.clearRect(0, 0, w, h);
+
+  const radius = heatmapKernelRadius(props.cellSize, scale);
+  for (const mon of list) {
+    const cells = cellsByMonitor.get(mon.id) ?? [];
+    if (cells.length === 0) continue;
+    const screen = toCanvas(mon.x, mon.y);
+    heatCtx.save();
+    // 热核不能把一台显示器的热度涂到显示器间的空白区域。
+    heatCtx.beginPath();
+    heatCtx.rect(screen.cx, screen.cy, mon.width * scale, mon.height * scale);
+    heatCtx.clip();
+    for (const cell of cells) {
+      if (cell.count <= 0) continue;
+      const p = toCanvas(
+        mon.x + (cell.cell_x + 0.5) * props.cellSize,
+        mon.y + (cell.cell_y + 0.5) * props.cellSize,
+      );
+      const t = Math.max(0.12, normalize(cell.count, boundsForColor));
+      const peak = heatmapPeakAlpha(t);
+      const gradient = heatCtx.createRadialGradient(p.cx, p.cy, 0, p.cx, p.cy, radius);
+      gradient.addColorStop(0, `rgba(255, 255, 255, ${peak})`);
+      gradient.addColorStop(0.22, `rgba(255, 255, 255, ${peak * 0.9})`);
+      gradient.addColorStop(0.52, `rgba(255, 255, 255, ${peak * 0.5})`);
+      gradient.addColorStop(0.78, `rgba(255, 255, 255, ${peak * 0.16})`);
+      gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+      heatCtx.fillStyle = gradient;
+      heatCtx.fillRect(p.cx - radius, p.cy - radius, radius * 2, radius * 2);
+    }
+    heatCtx.restore();
+  }
+
+  // 热度场是灰度 alpha；这里用 LUT 一次性转换成当前配色，避免每个网格
+  // 仍然对应一个硬色块，同时让重叠区域自然趋向高温颜色。
+  const heatPixels = heatCtx.getImageData(0, 0, cv.width, cv.height).data;
+  const colorLayer = document.createElement("canvas");
+  colorLayer.width = cv.width;
+  colorLayer.height = cv.height;
+  const colorCtx = colorLayer.getContext("2d");
+  if (!colorCtx) return;
+  const colorPixels = colorCtx.createImageData(cv.width, cv.height);
+  const colorLut = Array.from({ length: 256 }, (_, i) => rampColor(i / 255, heatRamp));
+  const maxAlpha = heatmapPeakAlpha(1);
+  for (let i = 0; i < heatPixels.length; i += 4) {
+    const alpha = heatPixels[i + 3] / 255;
+    if (alpha <= 0.004) continue;
+    const rgb = colorLut[Math.round(heatmapColorPosition(alpha, maxAlpha) * 255)];
+    colorPixels.data[i] = rgb[0];
+    colorPixels.data[i + 1] = rgb[1];
+    colorPixels.data[i + 2] = rgb[2];
+    // 留出屏幕底色，低频区域呈柔和蓝光，高频区域逐渐变成高温红。
+    colorPixels.data[i + 3] = Math.round(Math.min(0.9, alpha * 0.92) * 255);
+  }
+  colorCtx.putImageData(colorPixels, 0, 0);
+  ctx.drawImage(colorLayer, 0, 0, w, h);
 
   // 显示器边框与名称
   ctx.strokeStyle = "rgba(148,163,184,0.55)";
@@ -164,7 +223,7 @@ onBeforeUnmount(() => {
   <div class="screen-heat">
     <div class="tools">
       <n-radio-group v-model:value="viewMode" size="small">
-        <n-radio-button value="all">全部显示器</n-radio-button>
+        <n-radio-button value="all"><Screen class="ui-icon button-icon" />全部显示器</n-radio-button>
         <n-radio-button v-for="m in props.monitors" :key="m.id" :value="m.id">
           {{ m.device_key.replace(/^\\\\?\.\\/, "") }}{{ m.is_primary ? "（主屏）" : "" }}
         </n-radio-button>
@@ -180,7 +239,7 @@ onBeforeUnmount(() => {
       </span>
     </div>
 
-    <div v-if="props.monitors.length === 0" class="empty">暂无显示器记录（需要先采集到点击事件）</div>
+    <div v-if="props.monitors.length === 0" class="empty empty-label"><ScreenOff class="ui-icon empty-icon" />暂无显示器记录（需要先采集到点击事件）</div>
     <canvas v-else ref="canvas" class="canvas" @mousemove="onMove" @mouseleave="hover = null" />
 
     <div class="footer">
@@ -188,7 +247,7 @@ onBeforeUnmount(() => {
       <span v-if="hover">
         坐标 ({{ hover.x }}, {{ hover.y }})：<b>{{ hover.count }}</b> 次点击
       </span>
-      <span class="tip">网格 {{ props.cellSize }}px · 色深按点击次数对数分布</span>
+      <span class="tip">平滑热成像 · 网格 {{ props.cellSize }}px · 色深按点击次数对数分布</span>
     </div>
   </div>
 </template>
@@ -207,9 +266,10 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 .canvas {
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  background: var(--paper-light);
+  border: 2px dashed var(--ink);
+  border-radius: 2px;
+  box-shadow: 1px 1px 0 rgba(44, 44, 44, 0.2);
   max-width: 100%;
 }
 .legend {
@@ -217,7 +277,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 3px;
   font-size: 11px;
-  color: #64748b;
+  color: var(--ink-soft);
 }
 .swatch {
   width: 18px;
@@ -231,19 +291,19 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 18px;
   font-size: 12.5px;
-  color: #475569;
+  color: var(--ink-soft);
   flex-wrap: wrap;
 }
 .tip {
-  color: #94a3b8;
+  color: var(--ink-soft);
 }
 .empty {
-  color: #94a3b8;
+  color: #6f6a62;
   font-size: 13px;
   padding: 24px;
   text-align: center;
-  background: #f8fafc;
-  border: 1px dashed #cbd5e1;
-  border-radius: 10px;
+  background: var(--paper-light);
+  border: 2px dashed var(--ink);
+  border-radius: 2px;
 }
 </style>
