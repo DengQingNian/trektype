@@ -222,7 +222,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="screen-heat">
     <div class="tools">
-      <n-radio-group v-model:value="viewMode" size="small">
+      <n-radio-group class="monitor-group" v-model:value="viewMode" size="small">
         <n-radio-button value="all"><Screen class="ui-icon button-icon" />全部显示器</n-radio-button>
         <n-radio-button v-for="m in props.monitors" :key="m.id" :value="m.id">
           {{ m.device_key.replace(/^\\\\?\.\\/, "") }}{{ m.is_primary ? "（主屏）" : "" }}
@@ -264,6 +264,9 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+.monitor-group {
+  gap: 4px;
 }
 .canvas {
   background: var(--paper-light);

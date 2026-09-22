@@ -148,7 +148,7 @@ onMounted(load);
     </div>
 
     <n-spin :show="loading">
-      <n-grid :cols="4" :x-gap="12" class="mb">
+      <n-grid :cols="4" :x-gap="12" :y-gap="12" class="mb">
         <n-gi><n-card size="small"><div class="stat-card"><DataBase class="ui-icon metric-icon" /><div class="stat"><span class="k">数据库大小</span><span class="v">{{ formatBytes(stats?.db_bytes ?? 0) }}</span></div></div></n-card></n-gi>
         <n-gi><n-card size="small"><div class="stat-card"><Table class="ui-icon metric-icon" /><div class="stat"><span class="k">按键明细</span><span class="v">{{ formatNumber(stats?.key_rows ?? 0) }} 行</span></div></div></n-card></n-gi>
         <n-gi><n-card size="small"><div class="stat-card"><Table class="ui-icon metric-icon" /><div class="stat"><span class="k">点击明细</span><span class="v">{{ formatNumber(stats?.mouse_rows ?? 0) }} 行</span></div></div></n-card></n-gi>

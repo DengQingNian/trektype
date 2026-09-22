@@ -33,7 +33,7 @@ function onPreset(v: string | number) {
 <template>
   <div class="range-picker">
     <span class="range-label">VIEW</span>
-    <n-radio-group :value="range.kind" size="small" @update:value="onPreset">
+    <n-radio-group class="preset-group" :value="range.kind" size="small" @update:value="onPreset">
       <n-radio-button value="day">今日</n-radio-button>
       <n-radio-button value="week">本周</n-radio-button>
       <n-radio-button value="month">本月</n-radio-button>
@@ -67,6 +67,9 @@ function onPreset(v: string | number) {
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.12em;
+}
+.preset-group {
+  gap: 4px;
 }
 .hint {
   font-size: 12px;
