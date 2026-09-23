@@ -4,7 +4,7 @@
  *
  * 渲染流程（计划 §8.3）：
  * 1. 按 monitors 快照重建虚拟桌面画布（含负坐标与 DPI 折算）；
- * 2. 按网格点击次数计算 log1p + P05/P99 色阶；
+ * 2. 每台显示器按本屏最高点击网格归一化；
  * 3. 每个网格中心绘制可叠加的径向热核，再按 alpha 着色，形成连续热成像；
  * 4. 叠加显示器边框与名称；悬停仍显示对应聚合网格的点击数。
  */
@@ -12,9 +12,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { NRadioGroup, NRadioButton } from "naive-ui";
 import { Screen, ScreenOff } from "@vicons/carbon";
 import {
-  computeBounds,
   getHeatmapRamp,
-  normalize,
   rampColor,
   rgbToCss,
   type HeatmapPalette,
@@ -23,6 +21,7 @@ import {
   heatmapColorPosition,
   heatmapKernelRadius,
   heatmapPeakAlpha,
+  normalizeHeatmapCount,
 } from "../lib/screen-heatmap";
 import type { GridCell, MonitorRow } from "../lib/ipc";
 
@@ -104,8 +103,11 @@ function render() {
     cells.push(cell);
     cellsByMonitor.set(cell.monitor_id, cells);
   }
-  const visibleCells = props.cells.filter((cell) => list.some((m) => m.id === cell.monitor_id));
-  const boundsForColor = computeBounds(visibleCells.map((cell) => cell.count));
+  const peakByMonitor = new Map<number, number>();
+  for (const [monitorId, cells] of cellsByMonitor) {
+    const peak = Math.max(0, ...cells.map((cell) => cell.count));
+    peakByMonitor.set(monitorId, peak);
+  }
   const heatRamp = getHeatmapRamp(props.palette);
   const heatLayer = document.createElement("canvas");
   heatLayer.width = cv.width;
@@ -131,7 +133,8 @@ function render() {
         mon.x + (cell.cell_x + 0.5) * props.cellSize,
         mon.y + (cell.cell_y + 0.5) * props.cellSize,
       );
-      const t = Math.max(0.12, normalize(cell.count, boundsForColor));
+      // 低频网格保留微弱可见度，但强度基准只取本屏最高点击次数。
+      const t = Math.max(0.04, normalizeHeatmapCount(cell.count, peakByMonitor.get(mon.id) ?? 0));
       const peak = heatmapPeakAlpha(t);
       const gradient = heatCtx.createRadialGradient(p.cx, p.cy, 0, p.cx, p.cy, radius);
       gradient.addColorStop(0, `rgba(255, 255, 255, ${peak})`);
@@ -155,11 +158,12 @@ function render() {
   if (!colorCtx) return;
   const colorPixels = colorCtx.createImageData(cv.width, cv.height);
   const colorLut = Array.from({ length: 256 }, (_, i) => rampColor(i / 255, heatRamp));
-  const maxAlpha = heatmapPeakAlpha(1);
   for (let i = 0; i < heatPixels.length; i += 4) {
     const alpha = heatPixels[i + 3] / 255;
     if (alpha <= 0.004) continue;
-    const rgb = colorLut[Math.round(heatmapColorPosition(alpha, maxAlpha) * 255)];
+    // alpha 是多个热核叠加后的真实透明度，范围是 0–1；不能再用单个热核的
+    // 峰值作为整张图的色阶上限，否则轻微叠加也会过早落到红色。
+    const rgb = colorLut[Math.round(heatmapColorPosition(alpha) * 255)];
     colorPixels.data[i] = rgb[0];
     colorPixels.data[i + 1] = rgb[1];
     colorPixels.data[i + 2] = rgb[2];
@@ -247,7 +251,7 @@ onBeforeUnmount(() => {
       <span v-if="hover">
         坐标 ({{ hover.x }}, {{ hover.y }})：<b>{{ hover.count }}</b> 次点击
       </span>
-      <span class="tip">平滑热成像 · 网格 {{ props.cellSize }}px · 色深按点击次数对数分布</span>
+      <span class="tip">平滑热成像 · 网格 {{ props.cellSize }}px · 每屏最高点击次数归一化</span>
     </div>
   </div>
 </template>

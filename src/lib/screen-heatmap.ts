@@ -23,8 +23,19 @@ export function heatmapPeakAlpha(normalizedHeat: number): number {
   return Math.min(0.76, 0.06 + clamp(normalizedHeat) * 0.7);
 }
 
+/**
+ * 将一个网格的点击次数按当前显示器的最高点击网格归一化。
+ *
+ * 屏幕之间不共用峰值，避免某台屏幕的高频点击把其他屏幕整体压暗；
+ * 同时不使用分位裁剪，让最高点击位置稳定对应到 1。
+ */
+export function normalizeHeatmapCount(count: number, peakCount: number): number {
+  if (!Number.isFinite(count) || count <= 0 || !Number.isFinite(peakCount) || peakCount <= 0) return 0;
+  return clamp(count / peakCount);
+}
+
 /** 把热核叠加后的 alpha 映射回色带位置。 */
-export function heatmapColorPosition(alpha: number, maxAlpha = heatmapPeakAlpha(1)): number {
+export function heatmapColorPosition(alpha: number, maxAlpha = 1): number {
   if (!Number.isFinite(maxAlpha) || maxAlpha <= 0) return 0;
   return clamp(alpha / maxAlpha);
 }
