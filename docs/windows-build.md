@@ -20,7 +20,7 @@ pnpm tauri build
 `pnpm tauri build` 成功时应至少生成以下两个文件：
 
 - `src-tauri/target/release/typetrek.exe`：未安装版 release 可执行文件
-- `src-tauri/target/release/bundle/nsis/TypeTrek_0.1.2_x64-setup.exe`：Windows x64 安装程序
+- `src-tauri/target/release/bundle/nsis/TypeTrek_0.1.3_x64-setup.exe`：Windows x64 安装程序
 
 ## NSIS 缓存准备
 
@@ -60,8 +60,8 @@ Invoke-WebRequest `
 ```powershell
 Get-Item `
   .\src-tauri\target\release\typetrek.exe, `
-  .\src-tauri\target\release\bundle\nsis\TypeTrek_0.1.2_x64-setup.exe |
+  .\src-tauri\target\release\bundle\nsis\TypeTrek_0.1.3_x64-setup.exe |
   Select-Object FullName, Length, LastWriteTime
 ```
 
-本次按上述流程验证于 2026-09-22，`pnpm tauri build` 返回成功，已生成 release 可执行文件和 NSIS 安装包。构建日志中的 `LNK4099`（OpenSSL PDB 缺失）以及 Vite 大 chunk 提示属于警告；只有命令退出码为 0 且两个产物均存在时，才视为打包成功。
+0.1.2 版本曾于 2026-09-22 按上述流程完成打包验证。构建日志中的 `LNK4099`（OpenSSL PDB 缺失）以及 Vite 大 chunk 提示属于警告；只有命令退出码为 0 且两个产物均存在时，才视为当前版本打包成功。

@@ -215,10 +215,39 @@ pub fn get_day_detail(
     query::day_detail(&state.db(), &date, with_repeat).map_err(|e| e.to_string())
 }
 
-/// 显示器列表（热力图布局重建）。
+/// 当前系统显示器列表（热力图以当前布局呈现历史点击）。
 #[tauri::command]
 pub fn get_monitors(state: State<'_, AppState>) -> Result<Vec<query::MonitorRow>, String> {
-    query::monitors(&state.db()).map_err(|e| e.to_string())
+    let historical = query::monitors(&state.db()).map_err(|e| e.to_string())?;
+    Ok(current_monitor_rows(
+        capture::monitors::snapshot_monitors(),
+        &historical,
+    ))
+}
+
+/// 实时快照转前端行；历史库只用于复用设备 id，不决定当前屏幕数量。
+fn current_monitor_rows(
+    attached: Vec<capture::monitors::MonitorInfo>,
+    historical: &[query::MonitorRow],
+) -> Vec<query::MonitorRow> {
+    attached
+        .into_iter()
+        .enumerate()
+        .map(|(index, monitor)| query::MonitorRow {
+            id: historical
+                .iter()
+                .find(|saved| saved.device_key == monitor.device_key)
+                .map(|saved| saved.id)
+                .unwrap_or(-(index as i64) - 1),
+            device_key: monitor.device_key,
+            is_primary: monitor.is_primary,
+            x: monitor.x,
+            y: monitor.y,
+            width: monitor.width,
+            height: monitor.height,
+            scale: monitor.scale,
+        })
+        .collect()
 }
 
 /// 已知应用字典（黑名单快捷添加）。
@@ -324,4 +353,66 @@ pub fn get_app_version() -> String {
 #[tauri::command]
 pub fn show_main_window(app: AppHandle) {
     tray::show_main_window(&app);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::capture::monitors::MonitorInfo;
+
+    #[test]
+    fn current_monitor_rows_only_return_attached_displays_and_reuse_saved_ids() {
+        let saved = vec![
+            query::MonitorRow {
+                id: 10,
+                device_key: "DISPLAY1".into(),
+                is_primary: true,
+                x: 0,
+                y: 0,
+                width: 1920,
+                height: 1080,
+                scale: 1.0,
+            },
+            query::MonitorRow {
+                id: 11,
+                device_key: "DISPLAY113".into(),
+                is_primary: true,
+                x: 0,
+                y: 0,
+                width: 1920,
+                height: 1080,
+                scale: 1.0,
+            },
+        ];
+        let attached = vec![MonitorInfo {
+            id: None,
+            device_key: "DISPLAY1".into(),
+            is_primary: true,
+            x: 0,
+            y: 0,
+            width: 2560,
+            height: 1440,
+            scale: 1.25,
+        }];
+        let rows = current_monitor_rows(attached, &saved);
+        assert_eq!(rows.len(), 1, "历史虚拟显示器不得出现在当前布局");
+        assert_eq!(rows[0].id, 10, "当前设备应沿用数据库 id");
+        assert_eq!(rows[0].width, 2560, "尺寸应采用实时快照");
+    }
+
+    #[test]
+    fn current_monitor_rows_assign_temporary_ids_to_new_displays() {
+        let attached = vec![MonitorInfo {
+            id: None,
+            device_key: "NEW".into(),
+            is_primary: true,
+            x: 0,
+            y: 0,
+            width: 1920,
+            height: 1080,
+            scale: 1.0,
+        }];
+        let rows = current_monitor_rows(attached, &[]);
+        assert_eq!(rows[0].id, -1, "尚未写入数据库的屏幕仍要能显示热力图");
+    }
 }

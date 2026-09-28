@@ -7,7 +7,7 @@ import type { EChartsOption } from "echarts";
 import EChart from "../components/EChart.vue";
 import RangePicker from "../components/RangePicker.vue";
 import ScreenHeatmap from "../components/ScreenHeatmap.vue";
-import { activeHeatmapMonitors } from "../lib/screen-heatmap";
+import { activeHeatmapMonitors, projectHeatmapToCurrentMonitors } from "../lib/screen-heatmap";
 import TopList from "../components/TopList.vue";
 import { useRangeStore } from "../stores/range";
 import { useSettingsStore } from "../stores/settings";
@@ -18,10 +18,14 @@ const range = useRangeStore();
 const settings = useSettingsStore();
 const loading = ref(false);
 const stats = ref<MouseStats | null>(null);
+const currentMonitors = ref<MouseStats["monitors"]>([]);
 
 const cellSize = computed(() => settings.config?.grid_cell_size ?? 24);
 const palette = computed(() => settings.config?.heatmap_palette ?? "classic");
-const activeMonitorCount = computed(() => activeHeatmapMonitors(stats.value?.monitors ?? [], stats.value?.cells ?? []).length);
+const heatmap = computed(() => projectHeatmapToCurrentMonitors(
+  stats.value?.monitors ?? [], stats.value?.cells ?? [], currentMonitors.value, cellSize.value,
+));
+const activeMonitorCount = computed(() => activeHeatmapMonitors(heatmap.value.monitors, heatmap.value.cells).length);
 
 const buttonOption = computed<EChartsOption>(() => ({
   tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
@@ -50,8 +54,8 @@ const topRegions = computed(() => {
   const total = s.total || 1;
   const cellsize = cellSize.value;
   const region = new Map<string, number>();
-  for (const c of s.cells) {
-    const mon = s.monitors.find((m) => m.id === c.monitor_id);
+  for (const c of heatmap.value.cells) {
+    const mon = heatmap.value.monitors.find((m) => m.id === c.monitor_id);
     if (!mon) continue;
     const gx = Math.min(2, Math.floor(((c.cell_x + 0.5) * cellsize) / (mon.width / 3)));
     const gy = Math.min(2, Math.floor(((c.cell_y + 0.5) * cellsize) / (mon.height / 3)));
@@ -61,7 +65,7 @@ const topRegions = computed(() => {
   return [...region.entries()]
     .map(([key, count]) => {
       const [midStr, idxStr] = key.split(":");
-      const mon = s.monitors.find((m) => m.id === Number(midStr));
+      const mon = heatmap.value.monitors.find((m) => m.id === Number(midStr));
       const name = REGION_NAMES[Number(idxStr)] ?? "未知区域";
       return {
         label: `${mon?.device_key.replace(/^\\\\?\.\\/, "") ?? "屏"} · ${name}`,
@@ -75,7 +79,12 @@ const topRegions = computed(() => {
 async function load() {
   loading.value = true;
   try {
-    stats.value = await api.getMouseStats(range.range.start_date, range.range.end_date);
+    const [nextStats, monitors] = await Promise.all([
+      api.getMouseStats(range.range.start_date, range.range.end_date),
+      api.getMonitors(),
+    ]);
+    stats.value = nextStats;
+    currentMonitors.value = monitors;
   } catch (e) {
     toastError(e, "加载鼠标统计失败");
   } finally {
@@ -103,7 +112,7 @@ watch(cellSize, load);
     </div>
 
     <n-spin :show="loading">
-      <div class="stats-row stagger-children">
+      <div class="stats-row">
         <n-card size="small"><div class="stat-card"><Cursor2 class="ui-icon metric-icon" /><n-statistic label="点击总数" :value="formatNumber(stats?.total ?? 0)" /></div></n-card>
         <n-card size="small"><div class="stat-card"><Screen class="ui-icon metric-icon" /><n-statistic label="本范围显示器" :value="`${activeMonitorCount} 台`" /></div></n-card>
         <n-card size="small">
@@ -113,8 +122,8 @@ watch(cellSize, load);
 
       <n-card size="small" class="mb">
         <ScreenHeatmap
-          :monitors="stats?.monitors ?? []"
-          :cells="stats?.cells ?? []"
+          :monitors="heatmap.monitors"
+          :cells="heatmap.cells"
           :cell-size="cellSize"
           :total="stats?.total ?? 0"
           :palette="palette"

@@ -98,7 +98,7 @@ watch(month, loadMonth);
     </div>
 
     <n-spin :show="loading">
-      <div class="stats-row stagger-children">
+      <div class="stats-row">
         <n-card size="small" style="--stagger-index: 0"><div class="stat-card"><Keyboard class="ui-icon metric-icon" /><n-statistic label="本月按键" :value="formatNumber(monthSummary.keyTotal)" /></div></n-card>
         <n-card size="small" style="--stagger-index: 1"><div class="stat-card"><Cursor2 class="ui-icon metric-icon" /><n-statistic label="本月点击" :value="formatNumber(monthSummary.clickTotal)" /></div></n-card>
         <n-card size="small" style="--stagger-index: 2"><div class="stat-card"><CalendarHeatMap class="ui-icon metric-icon" /><n-statistic label="有记录天数" :value="`${monthSummary.activeDays} 天`" /></div></n-card>

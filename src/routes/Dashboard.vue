@@ -151,7 +151,7 @@ watch(() => range.range, load, { deep: true });
     </n-alert>
 
     <n-spin :show="loading">
-      <div class="metric-grid stagger-children mb">
+      <div class="metric-grid mb">
         <div style="--stagger-index: 0">
           <n-card size="small" class="metric-card">
             <div class="stat-card"><Keyboard class="ui-icon metric-icon" /><n-statistic label="按键次数" :value="formatNumber(overview?.key_total ?? 0)" /></div>

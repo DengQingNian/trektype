@@ -11,7 +11,7 @@ const limit = () => props.max ?? 10;
 </script>
 
 <template>
-  <div class="top-list stagger-children">
+  <div class="top-list">
     <div
       v-for="(it, i) in items.slice(0, limit())"
       :key="it.label"

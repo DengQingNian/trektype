@@ -67,7 +67,7 @@ watch(() => range.range, load, { deep: true });
     </div>
 
     <n-spin :show="loading">
-      <div class="stats-row stagger-children">
+      <div class="stats-row">
         <n-card size="small" style="--stagger-index: 0"><div class="stat-card"><Keyboard class="ui-icon metric-icon" /><n-statistic label="按键总数" :value="formatNumber(stats?.total ?? 0)" /></div></n-card>
         <n-card size="small" style="--stagger-index: 1"><div class="stat-card"><Grid class="ui-icon metric-icon" /><n-statistic label="不同键位" :value="formatNumber(stats?.keys.length ?? 0)" /></div></n-card>
         <n-card size="small" style="--stagger-index: 2">

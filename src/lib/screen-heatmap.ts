@@ -7,6 +7,38 @@
 
 import type { GridCell, MonitorRow } from "./ipc";
 
+/** 把历史显示器上的网格按相对位置投影到当前屏幕布局，并合并重叠网格。 */
+export function projectHeatmapToCurrentMonitors(
+  historical: MonitorRow[],
+  cells: GridCell[],
+  current: MonitorRow[],
+  cellSize: number,
+): { monitors: MonitorRow[]; cells: GridCell[] } {
+  if (current.length === 0) return { monitors: historical, cells };
+  const sources = new Map(historical.map((monitor) => [monitor.id, monitor]));
+  const targetByKey = new Map(current.map((monitor) => [monitor.device_key, monitor]));
+  const primary = current.find((monitor) => monitor.is_primary) ?? current[0];
+  const projected = new Map<string, GridCell>();
+  const size = Math.max(1, cellSize);
+
+  for (const cell of cells) {
+    const source = sources.get(cell.monitor_id);
+    if (!source || cell.count <= 0) continue;
+    const target = targetByKey.get(source.device_key)
+      ?? (source.is_primary ? primary : current.find((monitor) => !monitor.is_primary && monitor.x === source.x && monitor.y === source.y))
+      ?? primary;
+    const x = Math.max(0, Math.min(Math.ceil(target.width / size) - 1,
+      Math.floor(((cell.cell_x + 0.5) * size / Math.max(1, source.width)) * target.width / size)));
+    const y = Math.max(0, Math.min(Math.ceil(target.height / size) - 1,
+      Math.floor(((cell.cell_y + 0.5) * size / Math.max(1, source.height)) * target.height / size)));
+    const key = `${target.id}:${x}:${y}`;
+    const existing = projected.get(key);
+    if (existing) existing.count += cell.count;
+    else projected.set(key, { monitor_id: target.id, cell_x: x, cell_y: y, count: cell.count });
+  }
+  return { monitors: current, cells: [...projected.values()] };
+}
+
 /** 只保留当前查询范围内有点击数据的显示器。 */
 export function activeHeatmapMonitors(monitors: MonitorRow[], cells: GridCell[]): MonitorRow[] {
   const ids = new Set(cells.filter((cell) => cell.count > 0).map((cell) => cell.monitor_id));

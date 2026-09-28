@@ -53,7 +53,6 @@ async function togglePause() {
       <nav aria-label="主导航">
         <RouterLink v-for="item in navItems" :key="item.name" :to="{ name: item.name }" class="nav-item" :class="{ active: route.name === item.name }">
           <span class="button-label"><component :is="item.icon" class="ui-icon nav-icon" aria-hidden="true" />{{ item.label }}</span>
-          <span class="nav-mark" aria-hidden="true">↗</span>
         </RouterLink>
       </nav>
       <div class="privacy-note"><Locked class="ui-icon privacy-icon" aria-hidden="true" /><span>数据仅存本机 · 不上传</span><span>窗口关闭后仍在托盘运行</span></div>
@@ -71,11 +70,7 @@ async function togglePause() {
         </n-button>
       </header>
       <div class="view-stack">
-        <RouterView v-slot="{ Component }">
-          <Transition name="page-slide" mode="out-in">
-            <component :is="Component" :key="route.fullPath" />
-          </Transition>
-        </RouterView>
+        <RouterView />
       </div>
     </main>
   </div>
@@ -92,11 +87,9 @@ async function togglePause() {
 .sidebar-rule { display: flex; align-items: center; gap: 8px; color: var(--ink-soft); font-size: 9px; letter-spacing: .14em; }
 .sidebar-rule::before, .sidebar-rule::after { content: ""; height: 1px; flex: 1; border-top: 1px dashed var(--line); }
 nav { display: flex; flex-direction: column; gap: 5px; flex: 1; }
-.nav-item { display: flex; align-items: center; justify-content: space-between; color: var(--ink); text-decoration: none; padding: 10px 11px; border: 1px solid transparent; border-radius: 2px; font-size: 13.5px; transition: transform 160ms var(--ease-sketch), background-color 160ms ease, border-color 160ms ease; }
+.nav-item { display: flex; align-items: center; color: var(--ink); text-decoration: none; padding: 10px 11px; border: 1px solid transparent; border-radius: 2px; font-size: 13.5px; transition: transform 160ms var(--ease-sketch), background-color 160ms ease, border-color 160ms ease; }
 .nav-item:hover { background: rgba(245, 240, 232, .7); border-color: var(--line); transform: translateX(2px); }
 .nav-item.active { background: var(--ink); color: var(--paper); border-color: var(--ink); box-shadow: 2px 2px 0 rgba(44, 44, 44, .25); }
-.nav-mark { opacity: 0; transition: opacity 160ms ease, transform 160ms ease; }
-.nav-item:hover .nav-mark, .nav-item.active .nav-mark { opacity: 1; transform: translateX(2px); }
 .privacy-note { display: grid; grid-template-columns: 8px 1fr; gap: 2px 7px; font-size: 10.5px; color: var(--ink-soft); line-height: 1.6; padding: 0 6px; }
 .privacy-note span:nth-child(2), .privacy-note span:nth-child(3) { grid-column: 2; }
 .privacy-icon { width: 13px; height: 13px; margin-top: 3px; color: var(--sage); }
@@ -112,7 +105,6 @@ nav { display: flex; flex-direction: column; gap: 5px; flex: 1; }
   .sidebar-rule, .privacy-note { display: none; }
   nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
   .nav-item { justify-content: center; padding: 8px 5px; font-size: 12px; }
-  .nav-mark { display: none; }
   .content { overflow: visible; padding: 18px 12px 32px; }
   .topbar { align-items: flex-start; gap: 12px; margin-bottom: 18px; }
   .topbar-kicker, .meta { display: none; }

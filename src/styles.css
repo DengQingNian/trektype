@@ -276,74 +276,6 @@ select {
   font-family: Georgia, "Times New Roman", "Microsoft YaHei", serif;
 }
 
-/* Fade In Up：页面区块挂载时轻量出现。 */
-@keyframes fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.fade-in-up,
-.page {
-  --sk-duration: 600ms;
-  --sk-delay: 0ms;
-  animation: fade-in-up var(--sk-duration) var(--ease-sketch) var(--sk-delay) both;
-}
-
-/* Stagger Children：统计卡片与列表依次入场。 */
-@keyframes stagger-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(15px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.stagger-children > * {
-  opacity: 0;
-  animation: stagger-fade-in 500ms var(--ease-sketch) both;
-  animation-delay: calc(var(--stagger-index, 0) * var(--stagger-delay, 75ms));
-}
-
-/* Slide Swap：路由内容与范围切换沿水平方向交替。 */
-@keyframes slide-in-from-right {
-  from {
-    opacity: 0;
-    transform: translateX(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes slide-out-to-left {
-  from {
-    opacity: 1;
-    transform: translateX(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateX(-30px);
-  }
-}
-
-.page-slide-enter-active {
-  animation: slide-in-from-right 400ms var(--ease-sketch) both;
-}
-
-.page-slide-leave-active {
-  animation: slide-out-to-left 400ms var(--ease-sketch) both;
-}
-
 .hover-lift {
   transition: transform 200ms cubic-bezier(0.33, 1, 0.68, 1), box-shadow 200ms cubic-bezier(0.33, 1, 0.68, 1);
 }
@@ -367,14 +299,5 @@ select {
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
-  }
-
-  .fade-in-up,
-  .page,
-  .stagger-children > *,
-  .page-slide-enter-active,
-  .page-slide-leave-active {
-    opacity: 1;
-    transform: none;
   }
 }

@@ -6,6 +6,7 @@ import {
   normalizeHeatmapCount,
   layoutHeatmapMonitors,
   activeHeatmapMonitors,
+  projectHeatmapToCurrentMonitors,
 } from "./screen-heatmap";
 
 describe("screen heatmap rendering parameters", () => {
@@ -66,5 +67,41 @@ describe("screen heatmap layout", () => {
     const active = activeHeatmapMonitors(monitors, [{ monitor_id: 2, cell_x: 0, cell_y: 0, count: 3 }]);
     expect(active.map((monitor) => monitor.id)).toEqual([2]);
     expect(activeHeatmapMonitors(monitors, [])).toEqual([]);
+  });
+});
+
+describe("screen heatmap current display projection", () => {
+  const oldPrimary = { id: 1, device_key: "DISPLAY1", is_primary: true, x: 0, y: 0, width: 2560, height: 1440, scale: 1.25 };
+  const oldVirtual = { id: 2, device_key: "DISPLAY113", is_primary: true, x: 0, y: 0, width: 1920, height: 1080, scale: 1 };
+  const current = { id: 3, device_key: "DISPLAY129", is_primary: true, x: 0, y: 0, width: 1920, height: 1080, scale: 1 };
+
+  it("当前只有一块屏幕时将历史主屏记录投影合并，点击次数不丢失", () => {
+    const result = projectHeatmapToCurrentMonitors(
+      [oldPrimary, oldVirtual, current],
+      [
+        { monitor_id: 1, cell_x: 40, cell_y: 20, count: 2 },
+        { monitor_id: 2, cell_x: 30, cell_y: 15, count: 3 },
+        { monitor_id: 3, cell_x: 30, cell_y: 15, count: 4 },
+      ],
+      [current],
+      24,
+    );
+    expect(result.monitors).toEqual([current]);
+    expect(result.cells).toEqual([{ monitor_id: 3, cell_x: 30, cell_y: 15, count: 9 }]);
+  });
+
+  it("当前多屏时优先按设备键匹配，再按主屏归属", () => {
+    const secondary = { id: 4, device_key: "DISPLAY2", is_primary: false, x: 1920, y: 0, width: 1280, height: 1024, scale: 1 };
+    const result = projectHeatmapToCurrentMonitors(
+      [oldVirtual, secondary],
+      [
+        { monitor_id: 2, cell_x: 1, cell_y: 1, count: 2 },
+        { monitor_id: 4, cell_x: 1, cell_y: 1, count: 5 },
+      ],
+      [current, secondary],
+      24,
+    );
+    expect(result.monitors).toEqual([current, secondary]);
+    expect(result.cells.map((cell) => [cell.monitor_id, cell.count])).toEqual([[3, 2], [4, 5]]);
   });
 });
