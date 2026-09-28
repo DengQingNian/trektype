@@ -132,11 +132,11 @@ src-tauri/target/release/bundle/nsis/
 发布正式版本时，先确保 `package.json` 与 `src-tauri/tauri.conf.json` 的版本一致，再创建并推送同名的 `v` 标签。例如当前版本：
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.2
+git push gh v0.1.2
 ```
 
-推送标签后，工作流会自动创建 GitHub Release，上传 NSIS 安装包、绿色版 ZIP 和 SHA-256 校验文件。标签必须严格匹配 Tauri 配置中的版本号（例如 `v0.1.0`）；如果只想验证构建而不发布版本，请使用分支推送、PR 或 Actions 页面中的 **Run workflow**。
+推送标签到 GitHub 远端 `gh` 后，工作流会自动创建 GitHub Release，上传 NSIS 安装包、绿色版 ZIP 和 SHA-256 校验文件。标签必须严格匹配 Tauri 配置中的版本号（例如 `v0.1.2`）；如果只想验证构建而不发布版本，请使用分支推送、PR 或 Actions 页面中的 **Run workflow**。
 
 Windows 构建使用 vendored OpenSSL 从源码编译 SQLCipher 依赖，因此还需要安装 [Strawberry Perl](https://strawberryperl.com/) 和 [NASM](https://www.nasm.us/)。如果 `openssl-src` 报配置或编译错误，请确保 Strawberry Perl 的 `bin` 目录位于 `PATH` 前部。
 

@@ -1,111 +1,31 @@
 <script setup lang="ts">
-/**
- * 日历热力图（ECharts calendar 系列）。
- * 键盘/鼠标两个序列切换；颜色深浅 = 活跃度（对数 + 分位裁剪后的色阶）。
- * 点击某天 → 触发 select 事件，由父页面展示单日详情。
- */
+/** 月历活跃度：完整周网格，键盘/鼠标切换，点击日期查看详情。 */
 import { computed } from "vue";
 import { NRadioGroup, NRadioButton } from "naive-ui";
 import { Cursor2, Keyboard } from "@vicons/carbon";
-import type { EChartsOption } from "echarts";
-import EChart from "./EChart.vue";
-import { monthDays } from "../lib/date";
-import { computeBounds, getHeatmapRamp, normalize, rampColor, rgbToCss, type HeatmapPalette } from "../lib/colorscale";
+import { calendarDayStyle, monthGrid } from "../lib/calendar-grid";
+import { todayLocal } from "../lib/date";
+import { computeBounds, getHeatmapRamp, rgbToCss, type HeatmapPalette } from "../lib/colorscale";
 import type { DayCount } from "../lib/ipc";
 
 const props = defineProps<{
   month: string;
   days: DayCount[];
   metric: "key" | "click";
-  /** 全局热力图配色方案 */
   palette: HeatmapPalette;
+  selected?: string | null;
 }>();
 const emit = defineEmits<{ (e: "select", date: string): void; (e: "update:metric", v: "key" | "click"): void }>();
 
-/** 补齐整月（无数据日显示为 0，颜色为空白）。 */
-const series = computed(() => {
-  const map = new Map(props.days.map((d) => [d.date, d]));
-  return monthDays(props.month).map((date) => {
-    const d = map.get(date);
-    const value = d ? (props.metric === "key" ? d.key_count : d.click_count) : 0;
-    return [date, value] as [string, number];
-  });
-});
-
-const maxValue = computed(() => Math.max(0, ...series.value.map(([, v]) => v)));
+const weekdays = ["一", "二", "三", "四", "五", "六", "日"];
+const today = todayLocal();
+const counts = computed(() => new Map(props.days.map((day) => [day.date, props.metric === "key" ? day.key_count : day.click_count])));
+const cells = computed(() => monthGrid(props.month).map((cell) => ({ ...cell, count: counts.value.get(cell.date) ?? 0 })));
+const bounds = computed(() => computeBounds(cells.value.filter((cell) => cell.inMonth).map((cell) => cell.count)));
+const maxValue = computed(() => Math.max(0, ...cells.value.filter((cell) => cell.inMonth).map((cell) => cell.count)));
 const paletteColors = computed(() => getHeatmapRamp(props.palette).map(rgbToCss));
+const ramp = computed(() => getHeatmapRamp(props.palette));
 
-const option = computed<EChartsOption>(() => {
-  const values = series.value.map(([, v]) => v);
-  const bounds = computeBounds(values);
-  const heatRamp = getHeatmapRamp(props.palette);
-  const cmap = (count: number) => {
-    if (count <= 0) return "#f1f5f9";
-    return rgbToCss(rampColor(Math.max(0.10, normalize(count, bounds)), heatRamp));
-  };
-  const textColor = (count: number) => (normalize(count, bounds) > 0.55 ? "#ffffff" : "#334155");
-
-  // 说明：ECharts 的 TS 类型把 label.color 限定为 string，但运行时支持回调函数
-  // （用于"深底白字/浅底深字"），因此此处用断言保留函数式配色。
-  return {
-    tooltip: {
-      formatter: (p: unknown) => {
-        const item = p as { data: [string, number] };
-        const [date, count] = item.data;
-        const label = props.metric === "key" ? "按键" : "点击";
-        return `${date}<br/>${label}：<b>${count.toLocaleString()}</b> 次`;
-      },
-    },
-    visualMap: { show: false, min: 0, max: Math.max(1, maxValue.value) },
-    calendar: {
-      top: 40,
-      left: 40,
-      right: 20,
-      bottom: 10,
-      range: props.month,
-      cellSize: ["auto", 20],
-      splitLine: { show: false },
-      itemStyle: { borderWidth: 2, borderColor: "#fff" },
-      dayLabel: { nameMap: ["日", "一", "二", "三", "四", "五", "六"], color: "#64748b", fontSize: 11 },
-      monthLabel: { show: false },
-      yearLabel: { show: false },
-    },
-    series: [
-      {
-        type: "heatmap",
-        coordinateSystem: "calendar",
-        data: series.value,
-        itemStyle: {
-          color: (p: unknown) => {
-            const params = p as { data: [string, number] };
-            return cmap(params.data[1]);
-          },
-        },
-        label: {
-          show: true,
-          formatter: (p: unknown) => {
-            const params = p as { data: [string, number] };
-            const [, count] = params.data;
-            return count > 0 ? count.toLocaleString() : "";
-          },
-          fontSize: 9,
-          color: (p: unknown) => {
-            const params = p as { data: [string, number] };
-            return textColor(params.data[1]);
-          },
-        },
-        emphasis: { itemStyle: { shadowBlur: 6, shadowColor: "rgba(0,0,0,0.3)" } },
-      },
-    ],
-  } as unknown as EChartsOption;
-});
-
-function onChartClick(params: unknown) {
-  const p = params as { componentType?: string; value?: unknown };
-  if (p.componentType === "series" && Array.isArray(p.value)) {
-    emit("select", String(p.value[0]));
-  }
-}
 </script>
 
 <template>
@@ -119,57 +39,52 @@ function onChartClick(params: unknown) {
         <n-radio-button value="key"><Keyboard class="ui-icon button-icon" />键盘</n-radio-button>
         <n-radio-button value="click"><Cursor2 class="ui-icon button-icon" />鼠标</n-radio-button>
       </n-radio-group>
-      <span class="hint">色深 = 当日活跃度（对数色阶）；点击日期查看详情</span>
+      <span class="hint">点击日期查看当天详情</span>
     </div>
-    <EChart :option="option" height="300px" @click="onChartClick" />
+    <div class="calendar-grid" :aria-label="`${props.month} 活跃度日历`">
+      <div v-for="day in weekdays" :key="day" class="weekday">{{ day }}</div>
+      <button
+        v-for="cell in cells"
+        :key="cell.date"
+        type="button"
+        class="day"
+        :class="{ outside: !cell.inMonth, selected: props.selected === cell.date, today: today === cell.date, active: cell.count > 0 }"
+        :style="cell.inMonth ? calendarDayStyle(cell.count, bounds, ramp) : undefined"
+        :disabled="!cell.inMonth"
+        :aria-label="`${cell.date}，${props.metric === 'key' ? '按键' : '点击'} ${cell.count.toLocaleString()} 次`"
+        :aria-pressed="props.selected === cell.date"
+        @click="emit('select', cell.date)"
+      >
+        <span class="day-number">{{ cell.day }}</span>
+        <span v-if="cell.inMonth && cell.count > 0" class="day-count">{{ cell.count.toLocaleString() }}</span>
+      </button>
+    </div>
     <div class="legend">
-      <span class="legend-label">少</span>
-      <span class="legend-bar">
-        <i v-for="color in paletteColors" :key="color" :style="{ backgroundColor: color }" />
-      </span>
-      <span class="legend-label">多</span>
-      <span class="max">当月单日最高：{{ maxValue.toLocaleString() }}</span>
+      <span>少</span>
+      <span class="legend-bar"><i v-for="color in paletteColors" :key="color" :style="{ backgroundColor: color }" /></span>
+      <span>多</span>
+      <span class="max">当月单日最高 {{ maxValue.toLocaleString() }} 次</span>
     </div>
   </div>
 </template>
 
 <style scoped>
-.cal-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.cal-tools {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.hint {
-  font-size: 12px;
-  color: var(--ink-soft);
-}
-.legend {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--ink-soft);
-}
-.legend-bar {
-  width: 110px;
-  height: 10px;
-  display: inline-flex;
-  overflow: hidden;
-  border: 1px dashed var(--ink);
-  border-radius: 2px;
-}
-.legend-bar i {
-  flex: 1;
-  display: block;
-}
-.max {
-  margin-left: 12px;
-}
+.cal-wrap { display: flex; flex-direction: column; gap: 14px; }
+.cal-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.hint, .legend { color: var(--ink-soft); font-size: 12px; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; width: 100%; max-width: 1080px; margin-inline: auto; }
+.weekday { text-align: center; padding: 3px 0 8px; color: var(--ink-soft); font-size: 12px; font-weight: 700; }
+.day { min-width: 0; height: 78px; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; padding: 9px 10px; border: 1px solid rgba(44, 44, 44, .12); border-radius: 3px; background: var(--paper-light); color: var(--ink); text-align: left; cursor: pointer; transition: transform 130ms var(--ease-sketch), box-shadow 130ms ease; }
+.day:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 2px 2px 0 rgba(44, 44, 44, .22); }
+.day:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.day.outside { opacity: .45; background: transparent; border-color: transparent; cursor: default; }
+.day.selected { outline: 2px solid var(--ink); outline-offset: 1px; }
+.day.today .day-number { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.day-number { font-size: 13px; font-weight: 700; }
+.day-count { font-size: 11px; font-variant-numeric: tabular-nums; font-weight: 700; }
+.legend { display: flex; align-items: center; gap: 6px; width: 100%; max-width: 1080px; margin-inline: auto; }
+.legend-bar { width: 110px; height: 9px; display: flex; overflow: hidden; border-radius: 2px; }
+.legend-bar i { flex: 1; }
+.max { margin-left: 8px; }
+@media (max-width: 700px) { .calendar-grid { gap: 3px; } .day { height: 64px; padding: 6px; } .day-count { font-size: 9px; } }
 </style>

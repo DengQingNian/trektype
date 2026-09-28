@@ -58,7 +58,7 @@ function onPreset(v: string | number) {
   gap: 12px;
   flex-wrap: wrap;
   padding: 6px 8px;
-  border: 1px dashed var(--line);
+  border: 1px solid rgba(44, 44, 44, 0.14);
   background: rgba(232, 226, 216, 0.45);
   box-shadow: 1px 1px 0 rgba(44, 44, 44, 0.16);
 }

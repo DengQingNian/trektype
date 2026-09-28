@@ -4,6 +4,8 @@ import {
   heatmapKernelRadius,
   heatmapPeakAlpha,
   normalizeHeatmapCount,
+  layoutHeatmapMonitors,
+  activeHeatmapMonitors,
 } from "./screen-heatmap";
 
 describe("screen heatmap rendering parameters", () => {
@@ -38,5 +40,31 @@ describe("screen heatmap rendering parameters", () => {
     expect(normalizeHeatmapCount(10, 0)).toBe(0);
     expect(normalizeHeatmapCount(10, Number.NaN)).toBe(0);
     expect(normalizeHeatmapCount(Number.NaN, 10)).toBe(0);
+  });
+});
+
+describe("screen heatmap layout", () => {
+  const monitors = [
+    { id: 1, device_key: "A", is_primary: true, x: 0, y: 0, width: 1920, height: 1080, scale: 1 },
+    { id: 2, device_key: "B", is_primary: false, x: 0, y: 0, width: 1920, height: 1080, scale: 1 },
+  ];
+
+  it("同坐标的历史显示器在全部视图中分开排布，不会叠画", () => {
+    const layout = layoutHeatmapMonitors(monitors, "all");
+    expect(layout.items).toHaveLength(2);
+    expect(layout.items[0].x + layout.items[0].width).toBeLessThan(layout.items[1].x);
+    expect(layout.items[0].y).toBe(layout.items[1].y);
+  });
+
+  it("单屏视图只返回所选显示器并使用完整可用宽度", () => {
+    const layout = layoutHeatmapMonitors(monitors, 2);
+    expect(layout.items.map((item) => item.monitor.id)).toEqual([2]);
+    expect(layout.items[0].width).toBe(900);
+  });
+
+  it("当前范围只显示有点击的显示器，忽略历史空屏幕", () => {
+    const active = activeHeatmapMonitors(monitors, [{ monitor_id: 2, cell_x: 0, cell_y: 0, count: 3 }]);
+    expect(active.map((monitor) => monitor.id)).toEqual([2]);
+    expect(activeHeatmapMonitors(monitors, [])).toEqual([]);
   });
 });

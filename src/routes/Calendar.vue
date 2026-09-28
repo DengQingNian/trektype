@@ -111,6 +111,7 @@ watch(month, loadMonth);
           :days="days"
           :metric="metric"
           :palette="palette"
+          :selected="selected"
           @update:metric="(v) => (metric = v)"
           @select="selectDate"
         />

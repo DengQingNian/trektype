@@ -159,8 +159,9 @@ select {
 .n-button.n-button--warning-type,
 .n-button.n-button--success-type {
   --n-border-radius: 3px !important;
-  border: 2px dashed var(--ink) !important;
+  border: 1px solid rgba(44, 44, 44, 0.42) !important;
   border-radius: 3px !important;
+  background-color: var(--paper-light) !important;
   box-shadow: 1px 1px 0 rgba(44, 44, 44, 0.22) !important;
   transition: transform 160ms var(--ease-sketch), box-shadow 160ms var(--ease-sketch), background-color 160ms ease, color 160ms ease !important;
 }
@@ -186,6 +187,7 @@ select {
 .n-button.n-button--primary-type {
   background-color: var(--ink) !important;
   color: var(--paper) !important;
+  border-color: var(--ink) !important;
 }
 
 .n-button.n-button--error-type {
@@ -214,8 +216,8 @@ select {
 }
 
 .n-radio-group .n-radio-button {
-  border: 2px dashed var(--ink) !important;
-  background-color: transparent !important;
+  border: 1px solid rgba(44, 44, 44, 0.28) !important;
+  background-color: var(--paper-light) !important;
   color: var(--ink) !important;
   transition: background-color 160ms ease, color 160ms ease, transform 160ms ease !important;
 }
@@ -227,6 +229,27 @@ select {
 .n-radio-group .n-radio-button.n-radio-button--checked {
   background-color: var(--ink) !important;
   color: var(--paper) !important;
+  border-color: var(--ink) !important;
+}
+
+/* 数字摘要是一组轻量信息，不再给每个小块加粗虚线外框。 */
+.metric-grid .n-card,
+.stats-row .n-card,
+.n-card:has(.stat-card),
+.insights .n-card,
+.n-card:has(.empty-label) {
+  border: 1px solid rgba(44, 44, 44, 0.16) !important;
+  background-color: var(--paper-light) !important;
+  box-shadow: 1px 1px 0 rgba(44, 44, 44, 0.12) !important;
+}
+
+.metric-grid .n-card:hover,
+.stats-row .n-card:hover,
+.n-card:has(.stat-card):hover,
+.insights .n-card:hover,
+.n-card:has(.empty-label):hover {
+  transform: none;
+  box-shadow: 1px 1px 0 rgba(44, 44, 44, 0.12) !important;
 }
 
 .n-tag {

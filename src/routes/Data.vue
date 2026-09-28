@@ -8,13 +8,11 @@ import {
   NButton,
   NCard,
   NDatePicker,
-  NGrid,
-  NGi,
   NRadioButton,
   NRadioGroup,
   NSpin,
 } from "naive-ui";
-import { Clean, DataBase, DocumentDownload, FolderOpen, Grid, Screen, Table, TrashCan } from "@vicons/carbon";
+import { Clean, DataBase, DocumentDownload, FolderOpen, TrashCan } from "@vicons/carbon";
 import { computed, onMounted, ref } from "vue";
 import { api, formatBytes, formatNumber, type DbStats } from "../lib/ipc";
 import { dialog, message, toastError } from "../lib/ui";
@@ -148,16 +146,20 @@ onMounted(load);
     </div>
 
     <n-spin :show="loading">
-      <n-grid :cols="4" :x-gap="12" :y-gap="12" class="mb">
-        <n-gi><n-card size="small"><div class="stat-card"><DataBase class="ui-icon metric-icon" /><div class="stat"><span class="k">数据库大小</span><span class="v">{{ formatBytes(stats?.db_bytes ?? 0) }}</span></div></div></n-card></n-gi>
-        <n-gi><n-card size="small"><div class="stat-card"><Table class="ui-icon metric-icon" /><div class="stat"><span class="k">按键明细</span><span class="v">{{ formatNumber(stats?.key_rows ?? 0) }} 行</span></div></div></n-card></n-gi>
-        <n-gi><n-card size="small"><div class="stat-card"><Table class="ui-icon metric-icon" /><div class="stat"><span class="k">点击明细</span><span class="v">{{ formatNumber(stats?.mouse_rows ?? 0) }} 行</span></div></div></n-card></n-gi>
-        <n-gi><n-card size="small"><div class="stat-card"><Grid class="ui-icon metric-icon" /><div class="stat"><span class="k">聚合行数</span><span class="v">{{ formatNumber(stats?.agg_rows ?? 0) }} 行</span></div></div></n-card></n-gi>
-        <n-gi><n-card size="small"><div class="stat-card"><DocumentDownload class="ui-icon metric-icon" /><div class="stat"><span class="k">应用数</span><span class="v">{{ formatNumber(stats?.app_count ?? 0) }}</span></div></div></n-card></n-gi>
-        <n-gi><n-card size="small"><div class="stat-card"><Screen class="ui-icon metric-icon" /><div class="stat"><span class="k">显示器数</span><span class="v">{{ formatNumber(stats?.monitor_count ?? 0) }}</span></div></div></n-card></n-gi>
-        <n-gi><n-card size="small"><div class="stat-card"><Clean class="ui-icon metric-icon" /><div class="stat"><span class="k">采集会话</span><span class="v">{{ formatNumber(stats?.session_count ?? 0) }}</span></div></div></n-card></n-gi>
-        <n-gi><n-card size="small"><div class="stat-card"><Table class="ui-icon metric-icon" /><div class="stat"><span class="k">最早明细</span><span class="v">{{ stats?.oldest_raw_date ?? "—" }}</span></div></div></n-card></n-gi>
-      </n-grid>
+      <section class="data-overview mb" aria-label="数据概况">
+        <div class="overview-primary">
+          <div class="overview-stat"><span class="k">数据库大小</span><strong class="v">{{ formatBytes(stats?.db_bytes ?? 0) }}</strong></div>
+          <div class="overview-stat"><span class="k">按键明细</span><strong class="v">{{ formatNumber(stats?.key_rows ?? 0) }}<small> 行</small></strong></div>
+          <div class="overview-stat"><span class="k">点击明细</span><strong class="v">{{ formatNumber(stats?.mouse_rows ?? 0) }}<small> 行</small></strong></div>
+        </div>
+        <div class="overview-secondary">
+          <div><span class="k">聚合行数</span><strong>{{ formatNumber(stats?.agg_rows ?? 0) }}</strong></div>
+          <div><span class="k">应用</span><strong>{{ formatNumber(stats?.app_count ?? 0) }}</strong></div>
+          <div><span class="k">显示器</span><strong>{{ formatNumber(stats?.monitor_count ?? 0) }}</strong></div>
+          <div><span class="k">采集会话</span><strong>{{ formatNumber(stats?.session_count ?? 0) }}</strong></div>
+          <div><span class="k">最早明细</span><strong>{{ stats?.oldest_raw_date ?? "—" }}</strong></div>
+        </div>
+      </section>
 
       <n-card size="small" class="mb">
         <template #header><span class="card-title"><DocumentDownload class="ui-icon card-title-icon" />导出数据</span></template>
@@ -233,20 +235,24 @@ h2 {
   font-size: 28px;
   line-height: 1.1;
 }
-.stat {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
+.data-overview { padding: 20px 24px 16px; background: var(--paper-light); border: 1px solid rgba(44, 44, 44, .18); border-left: 4px solid var(--rust); box-shadow: 2px 2px 0 rgba(44, 44, 44, .12); }
+.overview-primary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; padding-bottom: 18px; border-bottom: 1px solid rgba(44, 44, 44, .18); }
+.overview-stat { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.overview-secondary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 20px; padding-top: 15px; }
+.overview-secondary > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.overview-secondary strong { color: var(--ink); font-size: 15px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .k {
   font-size: 11.5px;
   color: var(--ink-soft);
 }
 .v {
-  font-size: 15px;
-  font-weight: 600;
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", "Microsoft YaHei", serif;
+  font-size: clamp(22px, 2.1vw, 32px);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
+.v small { font: 12px "Segoe UI", "Microsoft YaHei", sans-serif; color: var(--ink-soft); }
 .row {
   display: flex;
   align-items: center;
@@ -270,15 +276,10 @@ h2 {
   line-height: 1.7;
 }
 
-@media (max-width: 900px) {
-  .page :deep(.n-grid) {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-}
+@media (max-width: 900px) { .overview-secondary { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
 @media (max-width: 560px) {
-  .page :deep(.n-grid) {
-    grid-template-columns: 1fr !important;
-  }
+  .overview-primary { grid-template-columns: 1fr; gap: 12px; }
+  .overview-secondary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 </style>

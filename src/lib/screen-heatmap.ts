@@ -5,6 +5,49 @@
  * 热核半径、透明度和色带映射在极端数据下仍然稳定。
  */
 
+import type { GridCell, MonitorRow } from "./ipc";
+
+/** 只保留当前查询范围内有点击数据的显示器。 */
+export function activeHeatmapMonitors(monitors: MonitorRow[], cells: GridCell[]): MonitorRow[] {
+  const ids = new Set(cells.filter((cell) => cell.count > 0).map((cell) => cell.monitor_id));
+  return monitors.filter((monitor) => ids.has(monitor.id));
+}
+
+export interface HeatmapMonitorTile {
+  monitor: MonitorRow;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  scale: number;
+}
+
+/** 全部视图分屏排布，避免历史记录中坐标相同的显示器相互叠画。 */
+export function layoutHeatmapMonitors(monitors: MonitorRow[], mode: "all" | number, maxWidth = 900) {
+  const visible = mode === "all" ? monitors : monitors.filter((monitor) => monitor.id === mode);
+  const columns = mode === "all" && visible.length > 1 ? 2 : 1;
+  const gap = 20;
+  const tileWidth = (maxWidth - gap * (columns - 1)) / columns;
+  const items: HeatmapMonitorTile[] = [];
+  let y = 0;
+  for (let index = 0; index < visible.length; index += columns) {
+    const row = visible.slice(index, index + columns).map((monitor, column) => {
+      const scale = Math.min(1, tileWidth / Math.max(1, monitor.width));
+      return {
+        monitor,
+        x: column * (tileWidth + gap),
+        y,
+        width: monitor.width * scale,
+        height: monitor.height * scale,
+        scale,
+      };
+    });
+    items.push(...row);
+    y += Math.max(...row.map((item) => item.height)) + gap;
+  }
+  return { width: maxWidth, height: Math.max(1, y - (items.length ? gap : 0)), items };
+}
+
 function clamp(value: number, min = 0, max = 1): number {
   if (!Number.isFinite(value)) return min;
   return Math.min(max, Math.max(min, value));

@@ -3,7 +3,7 @@
  * 屏幕点击热力图（Canvas 自绘，多显示器）。
  *
  * 渲染流程（计划 §8.3）：
- * 1. 按 monitors 快照重建虚拟桌面画布（含负坐标与 DPI 折算）；
+ * 1. 每台显示器单独排布，避免不同时期记录的相同坐标显示器叠画；
  * 2. 每台显示器按本屏最高点击网格归一化；
  * 3. 每个网格中心绘制可叠加的径向热核，再按 alpha 着色，形成连续热成像；
  * 4. 叠加显示器边框与名称；悬停仍显示对应聚合网格的点击数。
@@ -21,6 +21,8 @@ import {
   heatmapColorPosition,
   heatmapKernelRadius,
   heatmapPeakAlpha,
+  activeHeatmapMonitors,
+  layoutHeatmapMonitors,
   normalizeHeatmapCount,
 } from "../lib/screen-heatmap";
 import type { GridCell, MonitorRow } from "../lib/ipc";
@@ -39,38 +41,17 @@ const canvas = ref<HTMLCanvasElement | null>(null);
 const viewMode = ref<"all" | number>("all");
 const hover = ref<{ x: number; y: number; count: number } | null>(null);
 
-/** 参与渲染的显示器（单屏模式时只取一台）。 */
-const shownMonitors = computed(() =>
-  viewMode.value === "all" ? props.monitors : props.monitors.filter((m) => m.id === viewMode.value),
-);
+const activeMonitors = computed(() => activeHeatmapMonitors(props.monitors, props.cells));
+const layout = computed(() => layoutHeatmapMonitors(activeMonitors.value, viewMode.value));
 
-/** 虚拟桌面包围盒（物理像素，含负坐标）。 */
-const bounds = computed(() => {
-  const list = shownMonitors.value;
-  if (list.length === 0) return { x: 0, y: 0, w: 1, h: 1 };
-  const x = Math.min(...list.map((m) => m.x));
-  const y = Math.min(...list.map((m) => m.y));
-  const right = Math.max(...list.map((m) => m.x + m.width));
-  const bottom = Math.max(...list.map((m) => m.y + m.height));
-  return { x, y, w: Math.max(1, right - x), h: Math.max(1, bottom - y) };
-});
-
-/** 画布尺寸（CSS px）：按包围盒等比缩放到容器宽度，上限 900px 宽。 */
-const canvasSize = computed(() => {
-  const targetW = 900;
-  const scale = Math.min(1, targetW / bounds.value.w);
-  return {
-    w: Math.round(bounds.value.w * scale),
-    h: Math.round(bounds.value.h * scale),
-    scale,
-  };
+watch(activeMonitors, (monitors) => {
+  if (viewMode.value !== "all" && !monitors.some((monitor) => monitor.id === viewMode.value)) viewMode.value = "all";
 });
 
 function render() {
   const cv = canvas.value;
-  const list = shownMonitors.value;
-  if (!cv || list.length === 0) return;
-  const { w, h, scale } = canvasSize.value;
+  const { items, width: w, height: h } = layout.value;
+  if (!cv || items.length === 0) return;
   const dpr = window.devicePixelRatio || 1;
   cv.width = Math.max(1, Math.round(w * dpr));
   cv.height = Math.max(1, Math.round(h * dpr));
@@ -82,17 +63,10 @@ function render() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
 
-  const b = bounds.value;
-  const toCanvas = (mx: number, my: number) => ({
-    cx: (mx - b.x) * scale,
-    cy: (my - b.y) * scale,
-  });
-
   // 屏幕底色
-  for (const m of list) {
-    const p = toCanvas(m.x, m.y);
+  for (const item of items) {
     ctx.fillStyle = "#0b1220";
-    ctx.fillRect(p.cx, p.cy, m.width * scale, m.height * scale);
+    ctx.fillRect(item.x, item.y, item.width, item.height);
   }
 
   // 先画热度场：每个网格中心是一个平滑径向热核，多个热核会自然叠加。
@@ -117,22 +91,22 @@ function render() {
   heatCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
   heatCtx.clearRect(0, 0, w, h);
 
-  const radius = heatmapKernelRadius(props.cellSize, scale);
-  for (const mon of list) {
+  for (const item of items) {
+    const mon = item.monitor;
     const cells = cellsByMonitor.get(mon.id) ?? [];
     if (cells.length === 0) continue;
-    const screen = toCanvas(mon.x, mon.y);
+    const radius = heatmapKernelRadius(props.cellSize, item.scale);
     heatCtx.save();
     // 热核不能把一台显示器的热度涂到显示器间的空白区域。
     heatCtx.beginPath();
-    heatCtx.rect(screen.cx, screen.cy, mon.width * scale, mon.height * scale);
+    heatCtx.rect(item.x, item.y, item.width, item.height);
     heatCtx.clip();
     for (const cell of cells) {
       if (cell.count <= 0) continue;
-      const p = toCanvas(
-        mon.x + (cell.cell_x + 0.5) * props.cellSize,
-        mon.y + (cell.cell_y + 0.5) * props.cellSize,
-      );
+      const p = {
+        cx: item.x + (cell.cell_x + 0.5) * props.cellSize * item.scale,
+        cy: item.y + (cell.cell_y + 0.5) * props.cellSize * item.scale,
+      };
       // 低频网格保留微弱可见度，但强度基准只取本屏最高点击次数。
       const t = Math.max(0.04, normalizeHeatmapCount(cell.count, peakByMonitor.get(mon.id) ?? 0));
       const peak = heatmapPeakAlpha(t);
@@ -178,11 +152,11 @@ function render() {
   ctx.fillStyle = "rgba(226,232,240,0.85)";
   ctx.font = "11px ui-sans-serif, system-ui";
   ctx.lineWidth = 1;
-  for (const m of list) {
-    const p = toCanvas(m.x, m.y);
-    ctx.strokeRect(p.cx + 0.5, p.cy + 0.5, m.width * scale - 1, m.height * scale - 1);
+  for (const item of items) {
+    const m = item.monitor;
+    ctx.strokeRect(item.x + 0.5, item.y + 0.5, item.width - 1, item.height - 1);
     const label = `${m.device_key.replace(/^\\\\?\.\\/, "")}${m.is_primary ? " · 主屏" : ""} ${m.width}×${m.height}${m.scale !== 1 ? ` @${m.scale}x` : ""}`;
-    ctx.fillText(label, p.cx + 6, p.cy + 14);
+    ctx.fillText(label, item.x + 6, item.y + 14);
   }
 }
 
@@ -190,21 +164,21 @@ function onMove(e: MouseEvent) {
   const cv = canvas.value;
   if (!cv) return;
   const rect = cv.getBoundingClientRect();
-  const { scale } = canvasSize.value;
-  const b = bounds.value;
-  const px = (e.clientX - rect.left) / scale + b.x;
-  const py = (e.clientY - rect.top) / scale + b.y;
-  const mon = shownMonitors.value.find(
-    (m) => px >= m.x && px < m.x + m.width && py >= m.y && py < m.y + m.height,
+  const cx = (e.clientX - rect.left) * (cv.width / (window.devicePixelRatio || 1)) / rect.width;
+  const cy = (e.clientY - rect.top) * (cv.height / (window.devicePixelRatio || 1)) / rect.height;
+  const item = layout.value.items.find(
+    (tile) => cx >= tile.x && cx < tile.x + tile.width && cy >= tile.y && cy < tile.y + tile.height,
   );
-  if (!mon) {
+  if (!item) {
     hover.value = null;
     return;
   }
-  const cx = Math.floor((px - mon.x) / props.cellSize);
-  const cy = Math.floor((py - mon.y) / props.cellSize);
+  const px = item.monitor.x + (cx - item.x) / item.scale;
+  const py = item.monitor.y + (cy - item.y) / item.scale;
+  const gridX = Math.floor((px - item.monitor.x) / props.cellSize);
+  const gridY = Math.floor((py - item.monitor.y) / props.cellSize);
   const cell = props.cells.find(
-    (c) => c.monitor_id === mon.id && c.cell_x === cx && c.cell_y === cy,
+    (c) => c.monitor_id === item.monitor.id && c.cell_x === gridX && c.cell_y === gridY,
   );
   hover.value = {
     x: Math.round(px),
@@ -214,7 +188,7 @@ function onMove(e: MouseEvent) {
 }
 
 onMounted(render);
-watch(() => [props.cells, props.monitors, props.palette, viewMode.value], render, {
+watch(() => [props.cells, props.monitors, props.palette, props.cellSize, viewMode.value], render, {
   deep: true,
   flush: "post",
 });
@@ -228,7 +202,7 @@ onBeforeUnmount(() => {
     <div class="tools">
       <n-radio-group class="monitor-group" v-model:value="viewMode" size="small">
         <n-radio-button value="all"><Screen class="ui-icon button-icon" />全部显示器</n-radio-button>
-        <n-radio-button v-for="m in props.monitors" :key="m.id" :value="m.id">
+        <n-radio-button v-for="m in activeMonitors" :key="m.id" :value="m.id">
           {{ m.device_key.replace(/^\\\\?\.\\/, "") }}{{ m.is_primary ? "（主屏）" : "" }}
         </n-radio-button>
       </n-radio-group>
@@ -243,7 +217,7 @@ onBeforeUnmount(() => {
       </span>
     </div>
 
-    <div v-if="props.monitors.length === 0" class="empty empty-label"><ScreenOff class="ui-icon empty-icon" />暂无显示器记录（需要先采集到点击事件）</div>
+    <div v-if="activeMonitors.length === 0" class="empty empty-label"><ScreenOff class="ui-icon empty-icon" />当前时间范围暂无屏幕点击记录</div>
     <canvas v-else ref="canvas" class="canvas" @mousemove="onMove" @mouseleave="hover = null" />
 
     <div class="footer">
@@ -271,8 +245,11 @@ onBeforeUnmount(() => {
 }
 .monitor-group {
   gap: 4px;
+  display: flex;
+  flex-wrap: wrap;
 }
 .canvas {
+  align-self: center;
   background: var(--paper-light);
   border: 2px dashed var(--ink);
   border-radius: 2px;

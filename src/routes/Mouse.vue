@@ -7,6 +7,7 @@ import type { EChartsOption } from "echarts";
 import EChart from "../components/EChart.vue";
 import RangePicker from "../components/RangePicker.vue";
 import ScreenHeatmap from "../components/ScreenHeatmap.vue";
+import { activeHeatmapMonitors } from "../lib/screen-heatmap";
 import TopList from "../components/TopList.vue";
 import { useRangeStore } from "../stores/range";
 import { useSettingsStore } from "../stores/settings";
@@ -20,6 +21,7 @@ const stats = ref<MouseStats | null>(null);
 
 const cellSize = computed(() => settings.config?.grid_cell_size ?? 24);
 const palette = computed(() => settings.config?.heatmap_palette ?? "classic");
+const activeMonitorCount = computed(() => activeHeatmapMonitors(stats.value?.monitors ?? [], stats.value?.cells ?? []).length);
 
 const buttonOption = computed<EChartsOption>(() => ({
   tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
@@ -103,7 +105,7 @@ watch(cellSize, load);
     <n-spin :show="loading">
       <div class="stats-row stagger-children">
         <n-card size="small"><div class="stat-card"><Cursor2 class="ui-icon metric-icon" /><n-statistic label="点击总数" :value="formatNumber(stats?.total ?? 0)" /></div></n-card>
-        <n-card size="small"><div class="stat-card"><Screen class="ui-icon metric-icon" /><n-statistic label="显示器" :value="`${stats?.monitors.length ?? 0} 台`" /></div></n-card>
+        <n-card size="small"><div class="stat-card"><Screen class="ui-icon metric-icon" /><n-statistic label="本范围显示器" :value="`${activeMonitorCount} 台`" /></div></n-card>
         <n-card size="small">
           <div class="stat-card"><ChartPie class="ui-icon metric-icon" /><n-statistic label="左键占比" :value="`${stats && stats.total > 0 ? (((stats.by_button.find((b) => b.button === 'left')?.count ?? 0) / stats.total) * 100).toFixed(1) : '0.0'}%`" /></div>
         </n-card>
