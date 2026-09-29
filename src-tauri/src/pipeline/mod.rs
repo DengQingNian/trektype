@@ -10,6 +10,8 @@ use crate::capture::event::{EventKind, RawEvent};
 use crate::capture::monitors::{grid_cell, MonitorInfo};
 use crate::capture::CaptureShared;
 use crate::db::{self, dao};
+use crate::reminder::{Metric, ReminderEngine, ReminderInput};
+use crate::state::AppState;
 use batcher::FlushPolicy;
 use crossbeam_channel::{Receiver, RecvTimeoutError};
 use rusqlite::Connection;
@@ -18,6 +20,8 @@ use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tauri::{AppHandle, Manager};
+use tauri_plugin_notification::NotificationExt;
 
 /// flush 间隔与批大小上限（计划参数：500ms / 512 条）。
 pub const FLUSH_INTERVAL: Duration = Duration::from_millis(500);
@@ -38,6 +42,10 @@ pub struct FlushReport {
     pub clicks: usize,
     /// 本批错误（显示器落库或批量写入失败）
     pub error: Option<String>,
+    /// 批量事务是否成功提交；提醒必须以此为前提。
+    pub persisted: bool,
+    /// 成功提交且通过隐私边界过滤的按下/点击事件。
+    pub reminder_inputs: Vec<ReminderInput>,
 }
 
 /// exe 名 → app_id 解析器（进程内缓存，避免每事件查库；缺失时按需 upsert）。
@@ -161,6 +169,7 @@ pub fn flush_batch(
     let mut keys: Vec<dao::KeyEventRow<'_>> = Vec::new();
     let mut mice: Vec<dao::MouseEventRow<'_>> = Vec::new();
     let mut agg = dao::AggBatch::default();
+    let mut reminder_inputs = Vec::new();
 
     for ev in events {
         // 先解析 exe（不落库），黑名单命中则彻底丢弃——raw、聚合、apps 字典都不留痕迹
@@ -185,6 +194,11 @@ pub fn flush_batch(
                 let Some(code) = ev.key_code else { continue };
                 agg.add_key(ev.ts_ms, code, ev.is_repeat);
                 agg.add_app_key(ev.ts_ms, app_id);
+                reminder_inputs.push(ReminderInput {
+                    ts_ms: ev.ts_ms,
+                    metric: Metric::Key,
+                    is_repeat: ev.is_repeat,
+                });
                 if !privacy {
                     keys.push(dao::KeyEventRow {
                         ts: ev.ts_ms,
@@ -220,6 +234,11 @@ pub fn flush_batch(
 
                 agg.add_click(ev.ts_ms, button.as_str());
                 agg.add_app_click(ev.ts_ms, app_id);
+                reminder_inputs.push(ReminderInput {
+                    ts_ms: ev.ts_ms,
+                    metric: Metric::Click,
+                    is_repeat: false,
+                });
                 if let Some(m) = mon.as_ref() {
                     if let Some(mid) = m.id {
                         let (cx, cy) = grid_cell(x, y, m);
@@ -244,7 +263,10 @@ pub fn flush_batch(
 
     if !keys.is_empty() || !mice.is_empty() || !agg.is_empty() {
         match dao::write_batch(conn, &keys, &mice, &agg) {
-            Ok(_) => {}
+            Ok(_) => {
+                report.persisted = true;
+                report.reminder_inputs = reminder_inputs;
+            }
             Err(e) => report.error = Some(format!("批量写入失败（本批丢弃）：{e}")),
         }
     }
@@ -261,10 +283,11 @@ pub fn spawn_writer(
     rx: Receiver<RawEvent>,
     db_path: PathBuf,
     encrypted: bool,
+    app: Option<AppHandle>,
 ) -> std::io::Result<std::thread::JoinHandle<()>> {
     std::thread::Builder::new()
         .name("db-writer".to_string())
-        .spawn(move || run_writer(shared, rx, db_path, encrypted))
+        .spawn(move || run_writer(shared, rx, db_path, encrypted, app))
 }
 
 fn run_writer(
@@ -272,6 +295,7 @@ fn run_writer(
     rx: Receiver<RawEvent>,
     db_path: PathBuf,
     encrypted: bool,
+    app: Option<AppHandle>,
 ) {
     let mut conn = match db::crypto::open_maybe_encrypted(&db_path, encrypted)
         .and_then(|c| db::configure(&c).map_err(|e| e.to_string()).map(|_| c))
@@ -296,6 +320,7 @@ fn run_writer(
     let mut resolver = AppResolver::warm_up(&conn).unwrap_or_default();
     let mut policy = FlushPolicy::new(BATCH_SIZE, FLUSH_INTERVAL);
     let mut buffer: Vec<RawEvent> = Vec::with_capacity(BATCH_SIZE);
+    let mut reminders = ReminderEngine::new();
     shared.writer_ready.store(true, Ordering::SeqCst);
 
     /// 执行一次 flush 并更新共享统计（宏避免与借用检查冲突）。
@@ -304,6 +329,27 @@ fn run_writer(
             if !buffer.is_empty() || shared.monitors.is_dirty() {
                 let started = Instant::now();
                 let rep = flush_batch(&mut conn, &shared, &mut resolver, &buffer, session_id);
+                if rep.persisted && !rep.reminder_inputs.is_empty() {
+                    if let Some(app) = app.as_ref() {
+                        let cfg = app.state::<AppState>().config();
+                        if let Err(e) = reminders.process_committed(
+                            &conn,
+                            &cfg,
+                            &rep.reminder_inputs,
+                            db::now_ms(),
+                            |body| {
+                                app.notification()
+                                    .builder()
+                                    .title("TypeTrek 休息提醒")
+                                    .body(body)
+                                    .show()
+                                    .map_err(|e| e.to_string())
+                            },
+                        ) {
+                            eprintln!("[typetrek] 休息提醒处理失败：{e}");
+                        }
+                    }
+                }
                 shared.flush_count.fetch_add(1, Ordering::Relaxed);
                 shared
                     .last_flush_ms
@@ -585,6 +631,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!((agg_keys, agg_clicks), (2, 1), "聚合必须照常累计");
+        assert_eq!(rep.reminder_inputs.len(), 3, "隐私模式仍应根据聚合输入提醒");
     }
 
     /// 显示器快照落库：dirty 时 flush 会 upsert 并回填 id，随后点击可归到 monitor_id。
@@ -648,5 +695,60 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM key_events", [], |r| r.get(0))
             .unwrap();
         assert_eq!(n, 0);
+    }
+
+    /// 只有写入成功的按下与点击会交给提醒器，按键抬起和黑名单事件不计入。
+    #[test]
+    fn reminder_inputs_follow_persisted_filtering() {
+        let (mut conn, shared, mut resolver, sid, _mid) = setup();
+        shared.foreground.record(42, "bank.exe".to_string());
+        shared.set_blacklist(Blacklist {
+            keys: vec!["bank.exe".into()],
+            mouse: vec![],
+        });
+        let t = 1_700_000_000_000;
+        let mut blocked = key_event(t, "KeyA", false);
+        blocked.hwnd_foreground = 42;
+        let mut up = key_event(t + 1, "KeyA", false);
+        up.kind = EventKind::KeyUp;
+        let report = flush_batch(
+            &mut conn,
+            &shared,
+            &mut resolver,
+            &[
+                blocked,
+                up,
+                key_event(t + 2, "KeyB", true),
+                click_event(t + 3, MouseButton::Left, 1, 1),
+            ],
+            sid,
+        );
+        assert!(report.persisted);
+        assert_eq!(report.reminder_inputs.len(), 2);
+        assert_eq!(
+            report.reminder_inputs[0].metric,
+            crate::reminder::Metric::Key
+        );
+        assert!(report.reminder_inputs[0].is_repeat);
+        assert_eq!(
+            report.reminder_inputs[1].metric,
+            crate::reminder::Metric::Click
+        );
+    }
+
+    /// 写入事务失败时不能把内存里已筛出的事件交给提醒器。
+    #[test]
+    fn failed_flush_has_no_reminder_inputs() {
+        let (mut conn, shared, mut resolver, sid, _mid) = setup();
+        conn.execute_batch("DROP TABLE agg_key_daily").unwrap();
+        let report = flush_batch(
+            &mut conn,
+            &shared,
+            &mut resolver,
+            &[key_event(1_700_000_000_000, "KeyA", false)],
+            sid,
+        );
+        assert!(!report.persisted);
+        assert!(report.reminder_inputs.is_empty());
     }
 }

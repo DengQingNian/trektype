@@ -6,7 +6,7 @@
 use rusqlite::Connection;
 
 /// 当前代码期望的 schema 版本（新增迁移时递增并在此登记 DDL 常量）。
-pub const LATEST_VERSION: i32 = 2;
+pub const LATEST_VERSION: i32 = 3;
 
 /// 应用所有未执行的迁移。幂等：可重复调用。
 pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
@@ -18,6 +18,10 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
 
     if current < 2 {
         conn.execute_batch(crate::db::schema::V2)?;
+    }
+
+    if current < 3 {
+        conn.execute_batch(crate::db::schema::V3)?;
     }
 
     if current < LATEST_VERSION {
@@ -114,5 +118,16 @@ mod tests {
             )
             .unwrap();
         assert_eq!((keys, clicks, repeat), (3, 2, 0));
+    }
+
+    /// 升级后通知状态表存在；重复迁移不删除已记录的每日提醒。
+    #[test]
+    fn reminder_state_migration_is_idempotent() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        conn.execute("INSERT INTO reminder_daily_sent(date, metric, notified_at) VALUES ('2026-09-29', 'key', 42)", []).unwrap();
+        migrate(&conn).unwrap();
+        let ts: i64 = conn.query_row("SELECT notified_at FROM reminder_daily_sent WHERE date='2026-09-29' AND metric='key'", [], |r| r.get(0)).unwrap();
+        assert_eq!(ts, 42);
     }
 }

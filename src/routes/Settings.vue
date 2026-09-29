@@ -16,16 +16,18 @@ import {
 } from "naive-ui";
 import { Activity, Add, ColorPalette, Filter, FolderOpen, Information, Locked, LogoGithub, Security, Settings as SettingsIcon } from "@vicons/carbon";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { api, type AppConfig, type AppRow } from "../lib/ipc";
 import { getHeatmapRamp, HEATMAP_PALETTES, rgbToCss } from "../lib/colorscale";
 import { message, toastError } from "../lib/ui";
 import { useSettingsStore } from "../stores/settings";
+import ReminderSettings from "../components/ReminderSettings.vue";
 
 const settings = useSettingsStore();
 const form = ref<AppConfig | null>(null);
 const knownApps = ref<AppRow[]>([]);
 const saving = ref(false);
+const initialized = ref(false);
 const appVersion = ref<string | null>(null);
 let saveTimer: number | null = null;
 const githubUrl = "https://github.com/DengQingNian/trektype";
@@ -47,6 +49,8 @@ const palettePreview = computed(() => {
 async function load() {
   if (!settings.config) await settings.load();
   form.value = { ...(settings.config as AppConfig) };
+  await nextTick();
+  initialized.value = true;
   try {
     appVersion.value = await api.getAppVersion();
   } catch {
@@ -75,7 +79,7 @@ function scheduleSave() {
   }, 500);
 }
 
-watch(form, scheduleSave, { deep: true });
+watch(form, () => { if (initialized.value) scheduleSave(); }, { deep: true });
 
 /** 黑名单快捷添加：把已知应用追加进对应名单（去重）。 */
 function addToBlacklist(list: "blacklist_keys" | "blacklist_mouse", exe: string) {
@@ -148,6 +152,8 @@ onMounted(load);
         </n-form-item>
       </n-form>
     </n-card>
+
+    <ReminderSettings :config="form" @update:config="form = $event" />
 
     <n-card size="small" class="mt12">
       <template #header><span class="card-title"><Locked class="ui-icon card-title-icon" />隐私</span></template>

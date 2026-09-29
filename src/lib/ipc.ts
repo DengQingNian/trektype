@@ -27,6 +27,24 @@ export interface AppConfig {
   autostart: boolean;
   db_encrypted: boolean;
   tray_hint_shown: boolean;
+  /** 每日键盘输入上限提醒，默认关闭 */
+  daily_key_reminder_enabled: boolean;
+  /** 每日键盘按下次数阈值，默认 20000 */
+  daily_key_limit: number;
+  /** 每日鼠标点击上限提醒，默认关闭 */
+  daily_click_reminder_enabled: boolean;
+  /** 每日鼠标点击次数阈值，默认 4000 */
+  daily_click_limit: number;
+  /** 短期键盘密集输入提醒，默认关闭 */
+  burst_key_reminder_enabled: boolean;
+  /** 短期键盘按下次数阈值，默认 2500 */
+  burst_key_limit: number;
+  /** 短期鼠标密集点击提醒，默认关闭 */
+  burst_click_reminder_enabled: boolean;
+  /** 短期鼠标点击次数阈值，默认 300 */
+  burst_click_limit: number;
+  /** 共用滚动窗口分钟数，默认 10 */
+  burst_window_minutes: number;
 }
 
 // ---------- 与 src-tauri/src/commands/mod.rs 对应 ----------

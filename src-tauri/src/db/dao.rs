@@ -270,6 +270,7 @@ pub fn delete_range(
         "agg_click_grid_daily",
         "agg_app_daily",
         "agg_hour_daily",
+        "reminder_daily_sent",
     ] {
         tx.execute(
             &format!("DELETE FROM {table} WHERE date >= ?1 AND date <= ?2"),
@@ -653,6 +654,10 @@ mod tests {
         agg.add_app_click(d1, Some(app_id));
         write_batch(&mut conn, &keys, &mice, &agg).unwrap();
 
+        // 每日提醒状态也是按日期保存的数据，删除区间时应一并清除。
+        conn.execute("INSERT INTO reminder_daily_sent(date, metric, notified_at) VALUES ('2024-03-05','key',1)", []).unwrap();
+        conn.execute("INSERT INTO reminder_daily_sent(date, metric, notified_at) VALUES ('2024-03-06','key',2)", []).unwrap();
+
         let (s, e) = crate::db::local_date_range_to_ts("2024-03-05", "2024-03-05").unwrap();
         let removed = delete_range(&mut conn, "2024-03-05", "2024-03-05", s, e).unwrap();
         assert_eq!(removed, 2, "应删除 3/5 的 1 条键盘 + 1 条鼠标");
@@ -672,6 +677,7 @@ mod tests {
             ("agg_click_grid_daily", "count"),
             ("agg_app_daily", "key_count"),
             ("agg_hour_daily", "key_count"),
+            ("reminder_daily_sent", "notified_at"),
         ] {
             let d1_rows: i64 = conn
                 .query_row(

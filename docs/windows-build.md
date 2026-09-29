@@ -20,7 +20,7 @@ pnpm tauri build
 `pnpm tauri build` 成功时应至少生成以下两个文件：
 
 - `src-tauri/target/release/typetrek.exe`：未安装版 release 可执行文件
-- `src-tauri/target/release/bundle/nsis/TypeTrek_0.1.4_x64-setup.exe`：Windows x64 安装程序
+- `src-tauri/target/release/bundle/nsis/TypeTrek_0.2.0_x64-setup.exe`：Windows x64 安装程序
 
 ## NSIS 缓存准备
 
@@ -60,7 +60,7 @@ Invoke-WebRequest `
 ```powershell
 Get-Item `
   .\src-tauri\target\release\typetrek.exe, `
-  .\src-tauri\target\release\bundle\nsis\TypeTrek_0.1.4_x64-setup.exe |
+  .\src-tauri\target\release\bundle\nsis\TypeTrek_0.2.0_x64-setup.exe |
   Select-Object FullName, Length, LastWriteTime
 ```
 

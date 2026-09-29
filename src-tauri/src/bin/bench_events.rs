@@ -26,7 +26,7 @@ fn main() {
 
     let (tx, rx) = crossbeam_channel::bounded::<RawEvent>(QUEUE_CAPACITY);
     let shared = Arc::new(CaptureShared::new(tx));
-    let writer = match pipeline::spawn_writer(shared.clone(), rx, db_path.clone(), false) {
+    let writer = match pipeline::spawn_writer(shared.clone(), rx, db_path.clone(), false, None) {
         Ok(h) => h,
         Err(e) => {
             eprintln!("写入器启动失败：{e}");

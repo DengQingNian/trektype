@@ -17,6 +17,10 @@ pub const DEFAULT_RETENTION_DAYS: u32 = 90;
 pub const MAX_RETENTION_DAYS: u32 = 3650;
 /// 默认暂停/恢复快捷键。
 pub const DEFAULT_PAUSE_HOTKEY: &str = "Ctrl+Alt+P";
+/// 休息提醒阈值上限，限制手改配置或输入框的异常值。
+pub const MAX_REMINDER_LIMIT: u32 = 1_000_000;
+/// 短期提醒允许的滚动窗口长度（分钟）。
+pub const ALLOWED_BURST_WINDOWS: [u32; 4] = [5, 10, 15, 30];
 
 /// 应用配置（对应 `settings.json`）。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -54,6 +58,24 @@ pub struct AppConfig {
     pub db_encrypted: bool,
     /// "已最小化到托盘，仍在采集中"气泡是否提示过（仅首次提示，避免打扰）
     pub tray_hint_shown: bool,
+    /// 每日按键达到上限时提醒；默认关闭，避免升级后主动打扰。
+    pub daily_key_reminder_enabled: bool,
+    /// 每日按键提醒阈值；默认 20,000 次，可在设置页调整。
+    pub daily_key_limit: u32,
+    /// 每日鼠标点击达到上限时提醒；默认关闭。
+    pub daily_click_reminder_enabled: bool,
+    /// 每日点击提醒阈值；默认 4,000 次，可在设置页调整。
+    pub daily_click_limit: u32,
+    /// 短期按键密集输入提醒；默认关闭。
+    pub burst_key_reminder_enabled: bool,
+    /// 短期按键提醒阈值；默认 2,500 次。
+    pub burst_key_limit: u32,
+    /// 短期鼠标点击密集输入提醒；默认关闭。
+    pub burst_click_reminder_enabled: bool,
+    /// 短期点击提醒阈值；默认 300 次。
+    pub burst_click_limit: u32,
+    /// 键盘与鼠标共用的滚动窗口分钟数；默认 10 分钟。
+    pub burst_window_minutes: u32,
 }
 
 impl Default for AppConfig {
@@ -76,6 +98,15 @@ impl Default for AppConfig {
             autostart: false,
             db_encrypted: false,
             tray_hint_shown: false,
+            daily_key_reminder_enabled: false,
+            daily_key_limit: 20_000,
+            daily_click_reminder_enabled: false,
+            daily_click_limit: 4_000,
+            burst_key_reminder_enabled: false,
+            burst_key_limit: 2_500,
+            burst_click_reminder_enabled: false,
+            burst_click_limit: 300,
+            burst_window_minutes: 10,
         }
     }
 }
@@ -124,6 +155,13 @@ impl AppConfig {
         self.blacklist_keys.retain(|s| !s.trim().is_empty());
         self.blacklist_mouse.retain(|s| !s.trim().is_empty());
         self.pause_hotkey = self.pause_hotkey.trim().to_string();
+        self.daily_key_limit = self.daily_key_limit.clamp(1, MAX_REMINDER_LIMIT);
+        self.daily_click_limit = self.daily_click_limit.clamp(1, MAX_REMINDER_LIMIT);
+        self.burst_key_limit = self.burst_key_limit.clamp(1, MAX_REMINDER_LIMIT);
+        self.burst_click_limit = self.burst_click_limit.clamp(1, MAX_REMINDER_LIMIT);
+        if !ALLOWED_BURST_WINDOWS.contains(&self.burst_window_minutes) {
+            self.burst_window_minutes = 10;
+        }
         self
     }
 }
@@ -243,5 +281,37 @@ mod tests {
         let c: AppConfig = serde_json::from_str(raw).unwrap();
         assert!(!c.capture_enabled);
         assert_eq!(c.grid_cell_size, 24, "缺失字段用默认值");
+    }
+
+    /// 旧配置未包含提醒字段时，四项提醒均保持关闭且使用可编辑预设值。
+    #[test]
+    fn legacy_config_uses_disabled_reminder_defaults() {
+        let c: AppConfig = serde_json::from_str(r#"{"capture_enabled":true}"#).unwrap();
+        assert!(!c.daily_key_reminder_enabled);
+        assert!(!c.daily_click_reminder_enabled);
+        assert!(!c.burst_key_reminder_enabled);
+        assert!(!c.burst_click_reminder_enabled);
+        assert_eq!((c.daily_key_limit, c.daily_click_limit), (20_000, 4_000));
+        assert_eq!((c.burst_key_limit, c.burst_click_limit), (2_500, 300));
+        assert_eq!(c.burst_window_minutes, 10);
+    }
+
+    /// 用户手改配置产生的零阈值、超大值与不支持的时长必须归一化。
+    #[test]
+    fn reminder_limits_and_window_are_normalized() {
+        let c = AppConfig {
+            daily_key_limit: 0,
+            daily_click_limit: u32::MAX,
+            burst_key_limit: 0,
+            burst_click_limit: u32::MAX,
+            burst_window_minutes: 7,
+            ..AppConfig::default()
+        }
+        .normalized();
+        assert_eq!(c.daily_key_limit, 1);
+        assert_eq!(c.daily_click_limit, MAX_REMINDER_LIMIT);
+        assert_eq!(c.burst_key_limit, 1);
+        assert_eq!(c.burst_click_limit, MAX_REMINDER_LIMIT);
+        assert_eq!(c.burst_window_minutes, 10);
     }
 }

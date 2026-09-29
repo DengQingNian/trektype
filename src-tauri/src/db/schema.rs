@@ -119,3 +119,13 @@ CREATE TABLE agg_hour_daily (
 pub const V2: &str = r#"
 ALTER TABLE agg_hour_daily ADD COLUMN repeat_count INTEGER NOT NULL DEFAULT 0;
 "#;
+
+/// v3：按本地日期与输入类型记录已成功发送的每日休息提醒。
+pub const V3: &str = r#"
+CREATE TABLE reminder_daily_sent (
+  date        TEXT NOT NULL,
+  metric      TEXT NOT NULL CHECK(metric IN ('key', 'click')),
+  notified_at INTEGER NOT NULL,
+  PRIMARY KEY (date, metric)
+);
+"#;

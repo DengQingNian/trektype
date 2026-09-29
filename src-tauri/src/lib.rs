@@ -11,6 +11,7 @@ pub mod commands;
 pub mod config;
 pub mod db;
 pub mod pipeline;
+pub mod reminder;
 pub mod state;
 pub mod tray;
 
@@ -90,7 +91,13 @@ pub fn run() {
             ));
 
             // ---------- 写入器（常驻；未同意时队列始终为空） ----------
-            if let Err(e) = pipeline::spawn_writer(shared.clone(), rx, db_path, cfg.db_encrypted) {
+            if let Err(e) = pipeline::spawn_writer(
+                shared.clone(),
+                rx,
+                db_path,
+                cfg.db_encrypted,
+                Some(handle.clone()),
+            ) {
                 eprintln!("[typetrek] 写入器线程启动失败：{e}");
             }
 
