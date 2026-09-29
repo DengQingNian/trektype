@@ -14,7 +14,8 @@ import {
   NSelect,
   NSwitch,
 } from "naive-ui";
-import { Activity, Add, ColorPalette, Filter, FolderOpen, Locked, Security, Settings as SettingsIcon } from "@vicons/carbon";
+import { Activity, Add, ColorPalette, Filter, FolderOpen, Information, Locked, LogoGithub, Security, Settings as SettingsIcon } from "@vicons/carbon";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { computed, onMounted, ref, watch } from "vue";
 import { api, type AppConfig, type AppRow } from "../lib/ipc";
 import { getHeatmapRamp, HEATMAP_PALETTES, rgbToCss } from "../lib/colorscale";
@@ -25,7 +26,9 @@ const settings = useSettingsStore();
 const form = ref<AppConfig | null>(null);
 const knownApps = ref<AppRow[]>([]);
 const saving = ref(false);
+const appVersion = ref<string | null>(null);
 let saveTimer: number | null = null;
+const githubUrl = "https://github.com/DengQingNian/trektype";
 
 const retentionOptions = [30, 90, 180, 365].map((d) => ({ label: `${d} 天`, value: d }));
 const cellOptions = [24, 32, 64].map((v) => ({ label: `${v} px`, value: v }));
@@ -44,6 +47,11 @@ const palettePreview = computed(() => {
 async function load() {
   if (!settings.config) await settings.load();
   form.value = { ...(settings.config as AppConfig) };
+  try {
+    appVersion.value = await api.getAppVersion();
+  } catch {
+    appVersion.value = "未知";
+  }
   try {
     knownApps.value = await api.getKnownApps();
   } catch {
@@ -83,6 +91,14 @@ async function openDir() {
     await api.openDataDir();
   } catch (e) {
     toastError(e, "打开目录失败");
+  }
+}
+
+async function openGithub() {
+  try {
+    await openUrl(githubUrl);
+  } catch (e) {
+    toastError(e, "打开 GitHub 失败");
   }
 }
 
@@ -224,6 +240,20 @@ onMounted(load);
       </n-form>
       <n-button size="small" @click="openDir"><template #icon><FolderOpen class="button-icon" /></template>打开数据目录</n-button>
     </n-card>
+
+    <n-card size="small" class="mt12">
+      <template #header><span class="card-title"><Information class="ui-icon card-title-icon" />关于</span></template>
+      <div class="about-content">
+        <div class="about-copy">
+          <div class="about-name">TypeTrek <span class="about-version">v{{ appVersion ?? "读取中…" }}</span></div>
+          <p>面向 Windows 的本地键盘与鼠标行为统计工具。</p>
+          <p>将键位、点击和前台应用的使用记录整理成热力图、日历与趋势；数据仅保存在本机。</p>
+        </div>
+        <n-button data-testid="github-button" size="small" secondary @click="openGithub">
+          <template #icon><LogoGithub class="button-icon" /></template>GitHub
+        </n-button>
+      </div>
+    </n-card>
   </div>
 </template>
 
@@ -311,5 +341,33 @@ code {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+}
+.about-content {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.about-name {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", "Microsoft YaHei", serif;
+  font-size: 18px;
+  font-weight: 700;
+}
+.about-version {
+  color: var(--rust);
+  font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+}
+.about-copy p {
+  margin: 5px 0 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.6;
 }
 </style>
